@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--<link rel="shortcut icon" href="img/logo0.5.png" type="image/x-icon">-->
+    <title>教案輔助評論系統</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap"
+    />
+  </head>
+  <body>
+    <!-- 頂部導航欄 -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <span class="notebook-emoji">
+            <i class="fa-solid fa-book"></i>
+        </span>
+        <h1 class="notebook-title">LCR</h1>
+      </div>
+      <div class="nav-right">
+        <button class="icon-btn" id="shareBtn" title="共享">
+          <span class="material-symbols-outlined">share</span>
+        </button>
+        <button class="icon-btn" id="settingsBtn" title="設定">
+          <span class="material-symbols-outlined">settings</span>
+        </button>
+        <div class="user-avatar">
+          <span class="material-symbols-outlined">account_circle</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主要內容區域 - 三欄布局 -->
+    <main class="main-container">
+      <!-- 左側：教案上傳面板 -->
+      <aside class="sources-panel">
+        <div class="panel-header">
+          <h2>教案來源</h2>
+          <button class="add-source-btn" id="addSourceBtn">
+            <span class="material-symbols-outlined">add</span>
+            新增教案
+          </button>
+        </div>
+
+        <div class="search-section">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" placeholder="搜尋教案..." id="searchInput" />
+          </div>
+        </div>
+
+        <div class="sources-list" id="sourcesList">
+          <!-- 教案列表將動態生成 -->
+          <div class="empty-state">
+            <span class="material-symbols-outlined">upload_file</span>
+            <p>尚無上傳教案</p>
+            <p class="hint">點擊「新增教案」開始</p>
+          </div>
+        </div>
+
+        <div class="upload-area hidden" id="uploadArea">
+          <div class="upload-card">
+            <h3>上傳教案文件</h3>
+            <div class="upload-zone" id="uploadZone">
+              <span class="material-symbols-outlined">cloud_upload</span>
+              <p>拖放文件或點擊上傳</p>
+              <p class="file-types">支援 PDF, DOC, DOCX, TXT</p>
+              <input
+                type="file"
+                id="fileInput"
+                accept=".pdf,.doc,.docx,.txt"
+                multiple
+                hidden
+              />
+            </div>
+            <button class="cancel-btn" id="cancelUploadBtn">取消</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 中間：對話面板 -->
+      <section class="chat-panel">
+        <div class="chat-header">
+          <h2>AI 助教對話</h2>
+          <div class="chat-controls">
+            <button class="icon-btn" id="chatStyleBtn" title="對話風格">
+              <span class="material-symbols-outlined">palette</span>
+            </button>
+            <button class="icon-btn" id="chatHistoryBtn" title="對話記錄">
+              <span class="material-symbols-outlined">history</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-content" id="chatContent">
+          <div class="welcome-message">
+            <div class="avatar-icon">
+              <span class="material-symbols-outlined">psychology</span>
+            </div>
+            <h3>👋 歡迎使用教案輔助評論系統</h3>
+            <p>我是您的 AI 助教，可以協助您：</p>
+            <div class="suggestion-chips">
+              <button class="chip" data-action="analyze">分析教案結構</button>
+              <button class="chip" data-action="score">評估教案品質</button>
+              <button class="chip" data-action="suggest">提供改進建議</button>
+              <button class="chip" data-action="compare">比較不同教案</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-container">
+          <div class="selected-sources" id="selectedSources">
+            <!-- 選擇的教案來源標籤 -->
+          </div>
+          <div class="chat-input-wrapper">
+            <textarea
+              id="chatInput"
+              placeholder="詢問關於教案的問題..."
+              rows="1"
+            ></textarea>
+            <button class="send-btn" id="sendBtn">
+              <span class="material-symbols-outlined">send</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右側：記事面板 -->
+      <aside class="notes-panel">
+        <div class="panel-header">
+          <h2>評論與記事</h2>
+          <button class="icon-btn" id="addNoteBtn" title="新增記事">
+            <span class="material-symbols-outlined">add_notes</span>
+          </button>
+        </div>
+
+        <div class="tabs-container">
+          <div class="tabs">
+            <button class="tab active" data-tab="notes">記事</button>
+            <button class="tab" data-tab="scores">評分</button>
+            <button class="tab" data-tab="generated">生成內容</button>
+          </div>
+        </div>
+
+        <!-- 記事標籤頁 -->
+        <div class="tab-content active" id="notesTab">
+          <div class="notes-list" id="notesList">
+            <div class="empty-state small">
+              <span class="material-symbols-outlined">note</span>
+              <p>尚無記事</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 評分標籤頁 -->
+        <div class="tab-content" id="scoresTab">
+          <div class="scoring-section">
+            <h3>教案評分</h3>
+            <div class="score-categories" id="scoreCategories">
+              <div class="score-item">
+                <label>教學目標明確性</label>
+                <div class="rating-stars" data-category="objectives">
+                  <span class="star" data-value="1">☆</span>
+                  <span class="star" data-value="2">☆</span>
+                  <span class="star" data-value="3">☆</span>
+                  <span class="star" data-value="4">☆</span>
+                  <span class="star" data-value="5">☆</span>
+                </div>
+              </div>
+              <div class="score-item">
+                <label>內容組織完整性</label>
+                <div class="rating-stars" data-category="content">
+                  <span class="star" data-value="1">☆</span>
+                  <span class="star" data-value="2">☆</span>
+                  <span class="star" data-value="3">☆</span>
+                  <span class="star" data-value="4">☆</span>
+                  <span class="star" data-value="5">☆</span>
+                </div>
+              </div>
+              <div class="score-item">
+                <label>教學方法創新性</label>
+                <div class="rating-stars" data-category="innovation">
+                  <span class="star" data-value="1">☆</span>
+                  <span class="star" data-value="2">☆</span>
+                  <span class="star" data-value="3">☆</span>
+                  <span class="star" data-value="4">☆</span>
+                  <span class="star" data-value="5">☆</span>
+                </div>
+              </div>
+              <div class="score-item">
+                <label>評量設計適切性</label>
+                <div class="rating-stars" data-category="assessment">
+                  <span class="star" data-value="1">☆</span>
+                  <span class="star" data-value="2">☆</span>
+                  <span class="star" data-value="3">☆</span>
+                  <span class="star" data-value="4">☆</span>
+                  <span class="star" data-value="5">☆</span>
+                </div>
+              </div>
+              <div class="score-item">
+                <label>時間規劃合理性</label>
+                <div class="rating-stars" data-category="timing">
+                  <span class="star" data-value="1">☆</span>
+                  <span class="star" data-value="2">☆</span>
+                  <span class="star" data-value="3">☆</span>
+                  <span class="star" data-value="4">☆</span>
+                  <span class="star" data-value="5">☆</span>
+                </div>
+              </div>
+            </div>
+            <div class="total-score">
+              <label>總體評分</label>
+              <div class="score-display">
+                <span class="score-value" id="totalScore">0.0</span>
+                <span class="score-max">/ 5.0</span>
+              </div>
+            </div>
+            <textarea
+              id="scoreComment"
+              placeholder="評分說明與建議..."
+              rows="4"
+            ></textarea>
+            <button class="primary-btn" id="submitScoreBtn">提交評分</button>
+          </div>
+        </div>
+
+        <!-- 生成內容標籤頁 -->
+        <div class="tab-content" id="generatedTab">
+          <div class="generated-content">
+            <h3>AI 生成內容</h3>
+            <div class="content-cards">
+              <button class="content-card" data-action="summary">
+                <span class="material-symbols-outlined">summarize</span>
+                <span>教案摘要</span>
+              </button>
+              <button class="content-card" data-action="rubric">
+                <span class="material-symbols-outlined">checklist</span>
+                <span>評分量表</span>
+              </button>
+              <button class="content-card" data-action="mindmap">
+                <span class="material-symbols-outlined">account_tree</span>
+                <span>概念圖</span>
+              </button>
+              <button class="content-card" data-action="report">
+                <span class="material-symbols-outlined">description</span>
+                <span>評論報告</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- 模態對話框 -->
+    <div class="modal hidden" id="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">對話框</h3>
+          <button class="close-btn" id="closeModalBtn">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body" id="modalBody">
+          <!-- 動態內容 -->
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
