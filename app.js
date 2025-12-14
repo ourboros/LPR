@@ -45,7 +45,7 @@ const DOM = {
   scoreCategories: document.getElementById("scoreCategories"),
   totalScore: document.getElementById("totalScore"),
   scoreComment: document.getElementById("scoreComment"),
-  submitScoreBtn: document.getElementById("submitScoreBtn"),
+  SaveScoreBtn: document.getElementById("SaveScoreBtn"),
 
   // 模態框
   modal: document.getElementById("modal"),
@@ -100,7 +100,7 @@ function setupEventListeners() {
 
   // 評分功能
   setupRatingStars();
-  DOM.submitScoreBtn.addEventListener("click", submitScore);
+  DOM.SaveScoreBtn.addEventListener("click", submitScore);
 
   // 生成內容
   document.querySelectorAll(".content-card").forEach((card) => {
