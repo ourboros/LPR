@@ -108,7 +108,11 @@
 }
 
 body {
-  font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    "Noto Sans TC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
   color: var(--text-primary);
   background-color: var(--bg-primary);
@@ -547,7 +551,8 @@ body {
 
 .message.assistant {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .message-content {
@@ -569,26 +574,117 @@ body {
   border-bottom-left-radius: var(--radius-sm);
 }
 
+/* 訊息操作按鈕 - Gemini/ChatGPT 風格 */
 .message-actions {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 0;
+  max-width: 70%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
-.message-actions button {
+.message.assistant:hover .message-actions {
+  opacity: 1;
+}
+
+.message-actions .action-btn {
+  padding: 6px 10px;
   background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
   cursor: pointer;
-  padding: var(--spacing-xs);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-  font-size: 12px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  color: var(--text-secondary);
 }
 
-.message-actions button:hover {
-  background: var(--bg-tertiary);
-  color: var(--md-primary-container);
+.message-actions .action-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--primary-purple);
+  color: var(--primary-purple);
+}
+
+.message-actions .action-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.message-actions .action-btn span:last-child {
+  font-weight: 500;
+}
+
+/* 載入動畫的訊息不顯示按鈕 */
+.message.loading .message-actions {
+  display: none;
+}
+
+/* Markdown 內容樣式 */
+.message-content h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 16px 0 8px 0;
+  color: var(--primary-purple);
+  border-bottom: 2px solid var(--primary-purple-light);
+  padding-bottom: 4px;
+}
+
+.message-content h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 12px 0 6px 0;
+  color: var(--text-primary);
+}
+
+.message-content p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.message-content li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.message-content strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message-content hr {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid var(--border-light);
+}
+
+.message-content code {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+}
+
+.message-content pre {
+  background: var(--bg-secondary);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
 }
 
 /* 對話輸入 */

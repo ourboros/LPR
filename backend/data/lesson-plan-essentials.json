@@ -1,0 +1,48 @@
+{
+  "definition": "教案被定義為教學活動的設計圖，是用文字寫成的詳細計劃。",
+  "core_elements": [
+    {
+      "id": "structure-phases",
+      "name": "基本架構與階段",
+      "description": "必須完整包含準備活動、發展活動與綜合活動三階段",
+      "required": true
+    },
+    {
+      "id": "clear-objectives",
+      "name": "明確的目標",
+      "description": "必須編撰正確的教學目標及具體（行為）目標，並與課綱能力指標掛鉤",
+      "required": true
+    },
+    {
+      "id": "teaching-materials-methods",
+      "name": "教材與教學方法",
+      "description": "需載明使用的教材內容、選擇的教學法或教學策略",
+      "required": true
+    },
+    {
+      "id": "teaching-resources",
+      "name": "教學資源與工具",
+      "description": "需包含教學時所用的教具、媒材或參考資料",
+      "required": true
+    },
+    {
+      "id": "activity-process",
+      "name": "活動內容與過程",
+      "description": "詳細描述教學時要進行的各項活動",
+      "required": true
+    },
+    {
+      "id": "time-allocation",
+      "name": "時間分配",
+      "description": "必須針對每個教學階段與活動進行時間的規劃與分配",
+      "required": true
+    },
+    {
+      "id": "learning-assessment",
+      "name": "學習評量",
+      "description": "需設計用以檢核學生學習成效的評量方式（如隨堂評量、作業指導）",
+      "required": true
+    }
+  ],
+  "summary": "教案不僅是流程的記錄，更是教師展現其課程規劃與設計實作能力的正式文字紀錄。"
+}

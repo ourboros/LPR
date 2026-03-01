@@ -3,6 +3,8 @@
 // ============================================
 
 // === 全局狀態管理 ===
+// === API 配置 ===
+const API_BASE_URL = "http://localhost:5000/api";
 const AppState = {
   sources: [],
   currentChat: [],
@@ -149,23 +151,40 @@ function handleFileSelect(e) {
   processFiles(files);
 }
 
-function processFiles(files) {
-  Array.from(files).forEach((file) => {
-    const source = {
-      id: Date.now() + Math.random(),
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      uploadDate: new Date(),
-      selected: false,
-    };
+async function processFiles(files) {
+  for (const file of files) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    AppState.sources.push(source);
-    addSourceToList(source);
-  });
+      const response = await fetch(`${API_BASE_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("上傳失敗");
+
+      const data = await response.json();
+
+      const source = {
+        id: data.id,
+        name: data.name,
+        type: data.type,
+        size: data.size,
+        uploadDate: new Date(data.uploadDate),
+        selected: false,
+      };
+
+      AppState.sources.push(source);
+      addSourceToList(source);
+    } catch (error) {
+      console.error("上傳錯誤:", error);
+      showNotification(`上傳 ${file.name} 失敗`, "error");
+    }
+  }
 
   hideUploadArea();
-  showNotification("成功上傳 " + files.length + " 個教案文件");
+  showNotification(`成功上傳 ${files.length} 個教案`);
 }
 
 function addSourceToList(source) {
@@ -194,7 +213,7 @@ function addSourceToList(source) {
     `;
 
   sourceItem.addEventListener("click", () =>
-    toggleSourceSelection(source.id, sourceItem)
+    toggleSourceSelection(source.id, sourceItem),
   );
   DOM.sourcesList.appendChild(sourceItem);
 }
@@ -211,7 +230,7 @@ function toggleSourceSelection(sourceId, element) {
     addSelectedSourceTag(source);
   } else {
     AppState.selectedSources = AppState.selectedSources.filter(
-      (s) => s.id !== sourceId
+      (s) => s.id !== sourceId,
     );
     removeSelectedSourceTag(sourceId);
   }
@@ -229,7 +248,7 @@ function addSelectedSourceTag(source) {
   tag.querySelector(".remove").addEventListener("click", () => {
     toggleSourceSelection(
       source.id,
-      document.querySelector(`[data-id="${source.id}"]`)
+      document.querySelector(`[data-id="${source.id}"]`),
     );
   });
 
@@ -252,23 +271,45 @@ function handleSearch(e) {
 }
 
 // === 對話功能 ===
-function sendMessage() {
+async function sendMessage() {
   const message = DOM.chatInput.value.trim();
   if (!message) return;
 
-  // 移除歡迎訊息
   const welcomeMsg = DOM.chatContent.querySelector(".welcome-message");
   if (welcomeMsg) welcomeMsg.remove();
 
-  // 添加用戶訊息
   addMessage("user", message);
   DOM.chatInput.value = "";
 
-  // 模擬 AI 回應
-  setTimeout(() => {
-    const response = generateAIResponse(message);
-    addMessage("assistant", response);
-  }, 1000);
+  const loadingMsg = addMessage("assistant", "🤔 正在分析中...");
+  loadingMsg.classList.add("loading");
+
+  try {
+    const selectedSourceIds = AppState.selectedSources.map((s) => s.id);
+
+    const response = await fetch(`${API_BASE_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        selectedSources: selectedSourceIds,
+        chatHistory: AppState.currentChat,
+      }),
+    });
+
+    if (!response.ok) throw new Error("API 請求失敗");
+
+    const data = await response.json();
+    loadingMsg.remove();
+    addMessage("assistant", data.content);
+  } catch (error) {
+    console.error("發送訊息錯誤:", error);
+    loadingMsg.remove();
+    addMessage(
+      "assistant",
+      "❌ 連接後端失敗。請確認後端服務運行於 http://localhost:5000",
+    );
+  }
 }
 
 function addMessage(role, content) {
@@ -277,7 +318,32 @@ function addMessage(role, content) {
 
   const messageContent = document.createElement("div");
   messageContent.className = "message-content";
-  messageContent.textContent = content;
+
+  // 使用 marked 解析 Markdown（僅針對 assistant 回應）
+  if (role === "assistant") {
+    try {
+      if (typeof marked !== "undefined") {
+        // 配置 marked 選項
+        marked.setOptions({
+          breaks: true, // 支援換行
+          gfm: true, // GitHub Flavored Markdown
+          headerIds: false, // 不生成 header id
+          mangle: false, // 不混淆郵件地址
+        });
+        messageContent.innerHTML = marked.parse(content);
+        console.log("✅ Markdown 解析成功");
+      } else {
+        console.warn("⚠️ marked.js 未載入，使用純文字顯示");
+        // 至少處理換行符號
+        messageContent.innerHTML = content.replace(/\n/g, "<br>");
+      }
+    } catch (error) {
+      console.error("❌ Markdown 解析錯誤:", error);
+      messageContent.innerHTML = content.replace(/\n/g, "<br>");
+    }
+  } else {
+    messageContent.textContent = content;
+  }
 
   message.appendChild(messageContent);
 
@@ -285,13 +351,13 @@ function addMessage(role, content) {
     const actions = document.createElement("div");
     actions.className = "message-actions";
     actions.innerHTML = `
-            <button onclick="saveToNotes(this)">
+            <button onclick="saveToNotes(this)" class="action-btn">
                 <span class="material-symbols-outlined">bookmark</span>
-                儲存至記事
+                <span>儲存至記事</span>
             </button>
-            <button onclick="copyMessage(this)">
+            <button onclick="copyMessage(this)" class="action-btn">
                 <span class="material-symbols-outlined">content_copy</span>
-                複製
+                <span>複製</span>
             </button>
         `;
     message.appendChild(actions);
@@ -301,42 +367,38 @@ function addMessage(role, content) {
   DOM.chatContent.scrollTop = DOM.chatContent.scrollHeight;
 
   AppState.currentChat.push({ role, content, timestamp: new Date() });
+  return message;
 }
 
-function generateAIResponse(message) {
-  const responses = {
-    default: `我已經分析了您的問題「${message}」。基於上傳的教案內容，我可以提供以下見解：\n\n這份教案展現了清晰的教學目標和結構化的內容組織。建議在教學方法上可以增加更多互動元素，以提升學生參與度。`,
-    analyze:
-      "根據教案分析，這份教案包含以下結構：\n1. 教學目標明確定義\n2. 內容組織完整\n3. 教學活動設計合理\n4. 評量方式多元\n\n建議可以加強教學方法的創新性。",
-    score:
-      "教案品質評估：\n• 教學目標明確性：4.0/5.0\n• 內容組織完整性：4.5/5.0\n• 教學方法創新性：3.5/5.0\n• 評量設計適切性：4.0/5.0\n• 時間規劃合理性：4.0/5.0\n\n總體評分：4.0/5.0",
-    suggest:
-      "改進建議：\n1. 增加小組討論活動，提升學生互動\n2. 納入更多實例和案例分析\n3. 設計多元評量方式\n4. 考慮差異化教學策略\n5. 加強科技工具的整合",
-    compare:
-      "教案比較分析：\n請選擇至少兩份教案進行比較。我將從教學目標、內容深度、教學方法、評量設計等維度進行全面比較分析。",
-  };
+async function handleSuggestionClick(e) {
+  const action = e.target.dataset.action;
 
-  // 檢查關鍵字匹配
-  for (const [key, response] of Object.entries(responses)) {
-    if (key !== "default" && message.includes(key)) {
-      return response;
-    }
+  if (AppState.selectedSources.length === 0) {
+    showNotification("請先上傳並選擇教案");
+    return;
   }
 
-  return responses.default;
-}
+  const lessonId = AppState.selectedSources[0].id;
 
-function handleSuggestionClick(e) {
-  const action = e.target.dataset.action;
-  const prompts = {
-    analyze: "請分析這份教案的整體結構和組織方式",
-    score: "請評估這份教案的品質並給出各項評分",
-    suggest: "請提供這份教案的具體改進建議",
-    compare: "請比較選定的教案之間的差異",
-  };
+  const loadingMsg = addMessage("assistant", "🤔 正在分析中...");
 
-  DOM.chatInput.value = prompts[action] || "";
-  DOM.chatInput.focus();
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lessonId }),
+    });
+
+    if (!response.ok) throw new Error("API 請求失敗");
+
+    const data = await response.json();
+    loadingMsg.remove();
+    addMessage("assistant", data.content);
+  } catch (error) {
+    console.error(`${action} 錯誤:`, error);
+    loadingMsg.remove();
+    addMessage("assistant", "❌ 操作失敗，請稍後再試");
+  }
 }
 
 // === 記事功能 ===

@@ -1,0 +1,64 @@
+[
+  {
+    "id": "philosophy-structure",
+    "title": "教案架構與設計理念",
+    "subtitle": "Design Philosophy & Structure",
+    "focus": "教案是否具備清楚的設計理念、完整的單元架構，並充分考量學生背景",
+    "required_data": [
+      "設計理念論述：需包含課程內容的重要性、亮點特色，以及與教學目標的相關性說明",
+      "學生背景分析：包含學生的先備知識、能力現況或可能遭遇的學習困難",
+      "單元架構圖/表：運用文字或圖表呈現教學重點與組織"
+    ],
+    "related_criteria": ["rationale", "student-analysis", "structure-phases"]
+  },
+  {
+    "id": "objectives-alignment",
+    "title": "目標設定與課綱符合度",
+    "subtitle": "Objectives & Alignment",
+    "focus": "設計內容是否符合課程綱要（課綱），且能清晰、有層次地呈現教學目標",
+    "required_data": [
+      "能力指標與目標編撰：需列出對應課綱的分段能力指標、單元目標及具體行為目標",
+      "教學要點對應：說明教學內容如何切中重點且不失焦"
+    ],
+    "related_criteria": ["objectives-clarity"]
+  },
+  {
+    "id": "instructional-logic",
+    "title": "教學活動與邏輯安排",
+    "subtitle": "Instructional Logic",
+    "focus": "包含準備、發展、綜合三階段的銜接是否順暢，能否引發動機並維持興趣",
+    "required_data": [
+      "動機引發活動：描述準備階段如何結合學生舊經驗導入新觀念（如暖身活動）",
+      "活動組織條理：呈現教學活動如何由易到難、由淺入深地循序漸進安排",
+      "問題設計與互動：包含引導思考的不同類型問題提問，以及小組學習或練習的規劃"
+    ],
+    "related_criteria": ["activity-design", "motivation", "structure-phases"]
+  },
+  {
+    "id": "methods-resources",
+    "title": "教學方法、資源與創意",
+    "subtitle": "Methods & Resources",
+    "focus": "是否運用適切且多元的教學策略，並有效利用相關資源",
+    "required_data": [
+      "教學方法說明：描述所採用的教學法（如以學生為中心的策略）",
+      "教學資源清單：包含電腦網路、媒體、教具、時事或生活化教材的選用",
+      "創意應用細節：包含所運用的創新策略及其與情境融入的適當性"
+    ],
+    "related_criteria": [
+      "teaching-methods",
+      "resources-tools",
+      "creativity-resources"
+    ]
+  },
+  {
+    "id": "assessment-time",
+    "title": "評量策略與時間分配",
+    "subtitle": "Assessment & Time",
+    "focus": "是否使用多元評量了解成效，且各階段時間分配合宜",
+    "required_data": [
+      "多元評量活動：包含安置性（教學過程前）、形成性（教學過程中）與總結性（教學結束後）評量的設計",
+      "時間分配表：清楚標註各教學階段與活動的預計時間（需切合實際）"
+    ],
+    "related_criteria": ["assessment", "time-management"]
+  }
+]
