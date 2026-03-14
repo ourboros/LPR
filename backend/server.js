@@ -10,6 +10,7 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const uiRoot = path.join(__dirname, "../lesson-review-ui");
 
 // ============================================
 // 中介軟體配置
@@ -29,6 +30,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
 // 靜態檔案
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/app", express.static(uiRoot));
 
 // 請求日誌
 app.use((req, res, next) => {
@@ -49,6 +51,10 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/scores", scoreRoutes);
 app.use("/api/generate", generateRoutes);
+
+app.get("/", (req, res) => {
+  res.redirect("/app/upload.html");
+});
 
 // 健康檢查
 app.get("/health", (req, res) => {

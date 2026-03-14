@@ -1,10 +1,10 @@
 # ============================================
 # LPR Stop Script
 # ============================================
-# 
+#
 # Usage: .\stop.ps1
 #
-# Stops all LPR-related processes
+# Stops backend (5000) and optional legacy frontend (3000)
 #
 # ============================================
 
@@ -39,6 +39,9 @@ $connections5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyCon
 if ($connections5000) {
     foreach ($conn in $connections5000) {
         $processId = $conn.OwningProcess
+        if ($processId -le 4) {
+            continue
+        }
         try {
             $process = Get-Process -Id $processId -ErrorAction Stop
             Write-Host "Stopping: $($process.ProcessName) (PID: $processId)" -ForegroundColor Yellow
@@ -52,13 +55,16 @@ if ($connections5000) {
     Write-Host "OK Port 5000 available" -ForegroundColor Green
 }
 
-# Stop Port 3000 (Frontend)
-Write-Host "Checking Port 3000 (Frontend)..." -ForegroundColor Yellow
+# Stop Port 3000 (Legacy Frontend, optional)
+Write-Host "Checking Port 3000 (Legacy Frontend, optional)..." -ForegroundColor Yellow
 
 $connections3000 = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
 if ($connections3000) {
     foreach ($conn in $connections3000) {
         $processId = $conn.OwningProcess
+        if ($processId -le 4) {
+            continue
+        }
         try {
             $process = Get-Process -Id $processId -ErrorAction Stop
             Write-Host "Stopping: $($process.ProcessName) (PID: $processId)" -ForegroundColor Yellow
@@ -69,7 +75,7 @@ if ($connections3000) {
         }
     }
 } else {
-    Write-Host "OK Port 3000 available" -ForegroundColor Green
+    Write-Host "OK Port 3000 available (legacy frontend not running)" -ForegroundColor Green
 }
 
 Write-Host ""
