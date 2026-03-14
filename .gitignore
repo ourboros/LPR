@@ -35,8 +35,5 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
-# 舊版/測試 UI
-lesson-review-ui/
-
 # 本地下載的 JS 庫（使用 CDN）
 marked.min.js
