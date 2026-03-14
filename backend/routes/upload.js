@@ -8,10 +8,15 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const fileParser = require("../services/fileParser");
+const Lesson = require("../models/Lesson");
 
 // 修正中文檔名編碼問題
 function decodeFilename(filename) {
   return Buffer.from(filename, "latin1").toString("utf8");
+}
+
+function generateNumericId() {
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
 
 // 確保上傳目錄存在
@@ -58,10 +63,6 @@ const upload = multer({
   },
 });
 
-// 取得 lessonStore（從 chat 路由共享）
-const chatRouter = require("./chat");
-const lessonStore = chatRouter.lessonStore;
-
 /**
  * POST /api/upload
  * 上傳單一教案檔案
@@ -83,24 +84,21 @@ router.post("/", upload.single("file"), async (req, res) => {
     }
 
     // 建立教案記錄
-    const lessonId = Date.now() + Math.random();
-    const lesson = {
-      id: lessonId,
+    const lessonId = generateNumericId();
+    const lesson = await Lesson.create({
+      lessonId,
       name: decodeFilename(req.file.originalname),
       filename: req.file.filename,
       type: req.file.mimetype,
       size: req.file.size,
-      uploadDate: new Date().toISOString(),
+      uploadDate: new Date(),
       content: extractedText,
       selected: false,
-    };
-
-    // 儲存至記憶體
-    lessonStore.set(lessonId, lesson);
+    });
 
     // 回傳結果（不包含完整 content）
     res.json({
-      id: lesson.id,
+      id: lesson.lessonId,
       name: lesson.name,
       type: lesson.type,
       size: lesson.size,
@@ -157,22 +155,20 @@ router.post("/multiple", upload.array("files", 10), async (req, res) => {
         }
 
         // 建立教案記錄
-        const lessonId = Date.now() + Math.random();
-        const lesson = {
-          id: lessonId,
+        const lessonId = generateNumericId();
+        const lesson = await Lesson.create({
+          lessonId,
           name: decodeFilename(file.originalname),
           filename: file.filename,
           type: file.mimetype,
           size: file.size,
-          uploadDate: new Date().toISOString(),
+          uploadDate: new Date(),
           content: extractedText,
           selected: false,
-        };
-
-        lessonStore.set(lessonId, lesson);
+        });
 
         results.push({
-          id: lesson.id,
+          id: lesson.lessonId,
           name: lesson.name,
           type: lesson.type,
           size: lesson.size,
@@ -203,10 +199,14 @@ router.post("/multiple", upload.array("files", 10), async (req, res) => {
  * GET /api/upload/lessons
  * 取得所有已上傳的教案列表
  */
-router.get("/lessons", (req, res) => {
+router.get("/lessons", async (req, res) => {
   try {
-    const lessons = Array.from(lessonStore.values()).map((lesson) => ({
-      id: lesson.id,
+    const lessons = await Lesson.find({}, { _id: 0, __v: 0 })
+      .sort({ uploadDate: -1 })
+      .lean();
+
+    const formattedLessons = lessons.map((lesson) => ({
+      id: lesson.lessonId,
       name: lesson.name,
       type: lesson.type,
       size: lesson.size,
@@ -214,7 +214,7 @@ router.get("/lessons", (req, res) => {
       contentLength: lesson.content?.length || 0,
     }));
 
-    res.json(lessons);
+    res.json(formattedLessons);
   } catch (error) {
     console.error("取得教案列表錯誤:", error);
     res.status(500).json({
@@ -228,16 +228,28 @@ router.get("/lessons", (req, res) => {
  * GET /api/upload/lesson/:id
  * 取得特定教案的完整內容
  */
-router.get("/lesson/:id", (req, res) => {
+router.get("/lesson/:id", async (req, res) => {
   try {
     const lessonId = parseFloat(req.params.id);
-    const lesson = lessonStore.get(lessonId);
+    const lesson = await Lesson.findOne(
+      { lessonId },
+      { _id: 0, __v: 0 },
+    ).lean();
 
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
 
-    res.json(lesson);
+    res.json({
+      id: lesson.lessonId,
+      name: lesson.name,
+      filename: lesson.filename,
+      type: lesson.type,
+      size: lesson.size,
+      uploadDate: lesson.uploadDate,
+      content: lesson.content,
+      selected: lesson.selected,
+    });
   } catch (error) {
     console.error("取得教案內容錯誤:", error);
     res.status(500).json({
@@ -251,10 +263,13 @@ router.get("/lesson/:id", (req, res) => {
  * DELETE /api/upload/lesson/:id
  * 刪除教案
  */
-router.delete("/lesson/:id", (req, res) => {
+router.delete("/lesson/:id", async (req, res) => {
   try {
     const lessonId = parseFloat(req.params.id);
-    const lesson = lessonStore.get(lessonId);
+    const lesson = await Lesson.findOne(
+      { lessonId },
+      { _id: 0, __v: 0 },
+    ).lean();
 
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
@@ -266,8 +281,7 @@ router.delete("/lesson/:id", (req, res) => {
       fs.unlinkSync(filePath);
     }
 
-    // 從記憶體中移除
-    lessonStore.delete(lessonId);
+    await Lesson.deleteOne({ lessonId });
 
     res.json({ message: "教案已刪除" });
   } catch (error) {

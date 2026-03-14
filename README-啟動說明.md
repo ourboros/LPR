@@ -14,6 +14,15 @@
 
 > 正式模式使用同源架構：後端直接提供 `lesson-review-ui` 靜態檔案。
 
+## 1.1 MongoDB 設定
+
+後端會讀取 `backend/.env` 的以下設定：
+
+- `MONGODB_URI`（預設：`mongodb://127.0.0.1:27017/`）
+- `MONGODB_DB_NAME`（預設：`lpr`）
+
+可先用 `backend/.env.example` 建立你的 `.env`。
+
 ## 2. 停止服務
 
 ```powershell

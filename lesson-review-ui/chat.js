@@ -30,6 +30,36 @@ function persistSidebarState() {
   );
 }
 
+function normalizeAssistantText(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    // 移除 Markdown 標題符號（行首 #、##、### ...）
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .trim();
+}
+
+function renderAssistantParagraphs(bubble, text) {
+  const normalized = normalizeAssistantText(text);
+
+  // 依空行分段，單段內保留換行
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    bubble.textContent = "AI 未回傳內容";
+    return;
+  }
+
+  paragraphs.forEach((paragraph) => {
+    const p = document.createElement("p");
+    p.className = "ai-paragraph";
+    p.textContent = paragraph;
+    bubble.appendChild(p);
+  });
+}
+
 function appendBubble(text, role, isShort = false) {
   const bubble = document.createElement("article");
   bubble.className =
@@ -39,7 +69,12 @@ function appendBubble(text, role, isShort = false) {
     bubble.classList.add("short");
   }
 
-  bubble.textContent = text;
+  if (role === "assistant") {
+    renderAssistantParagraphs(bubble, text);
+  } else {
+    bubble.textContent = text;
+  }
+
   chatList.appendChild(bubble);
   chatList.scrollTop = chatList.scrollHeight;
   return bubble;

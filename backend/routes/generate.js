@@ -5,10 +5,7 @@
 const express = require("express");
 const router = express.Router();
 const ragService = require("../services/rag-simple");
-
-// 取得 lessonStore
-const chatRouter = require("./chat");
-const lessonStore = chatRouter.lessonStore;
+const Lesson = require("../models/Lesson");
 
 /**
  * POST /api/generate
@@ -55,7 +52,7 @@ async function generateSummary(req, res, lessonId) {
     return res.status(400).json({ error: "請提供教案 ID" });
   }
 
-  const lesson = lessonStore.get(lessonId);
+  const lesson = await findLessonById(lessonId);
   if (!lesson) {
     return res.status(404).json({ error: "找不到指定的教案" });
   }
@@ -95,7 +92,7 @@ async function generateRubric(req, res, lessonId) {
     return res.status(400).json({ error: "請提供教案 ID" });
   }
 
-  const lesson = lessonStore.get(lessonId);
+  const lesson = await findLessonById(lessonId);
   if (!lesson) {
     return res.status(404).json({ error: "找不到指定的教案" });
   }
@@ -140,7 +137,7 @@ async function generateMindmap(req, res, lessonId) {
     return res.status(400).json({ error: "請提供教案 ID" });
   }
 
-  const lesson = lessonStore.get(lessonId);
+  const lesson = await findLessonById(lessonId);
   if (!lesson) {
     return res.status(404).json({ error: "找不到指定的教案" });
   }
@@ -181,7 +178,7 @@ async function generateReport(req, res, lessonId, scores) {
     return res.status(400).json({ error: "請提供教案 ID" });
   }
 
-  const lesson = lessonStore.get(lessonId);
+  const lesson = await findLessonById(lessonId);
   if (!lesson) {
     return res.status(404).json({ error: "找不到指定的教案" });
   }
@@ -269,5 +266,15 @@ router.post("/mindmap", async (req, res) => {
 router.post("/report", async (req, res) => {
   await generateReport(req, res, req.body.lessonId, req.body.scores);
 });
+
+async function findLessonById(rawLessonId) {
+  const lessonId = parseFloat(rawLessonId);
+
+  if (Number.isNaN(lessonId)) {
+    return null;
+  }
+
+  return Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+}
 
 module.exports = router;

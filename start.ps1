@@ -15,6 +15,24 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
+function Get-EnvFileValue {
+    param(
+        [string]$FilePath,
+        [string]$Key
+    )
+
+    if (-not (Test-Path $FilePath)) {
+        return $null
+    }
+
+    $line = Get-Content $FilePath | Where-Object { $_ -match "^$Key=" } | Select-Object -First 1
+    if (-not $line) {
+        return $null
+    }
+
+    return ($line -split "=", 2)[1]
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  LPR - Lesson Plan Review System" -ForegroundColor Cyan
@@ -52,6 +70,21 @@ if (-not (Test-Path $backendNodeModules)) {
 } else {
     Write-Host "OK Backend dependencies ready" -ForegroundColor Green
 }
+
+$envFilePath = ".\backend\.env"
+$mongoUri = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI"
+$mongoDbName = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_DB_NAME"
+
+if ([string]::IsNullOrWhiteSpace($mongoUri)) {
+    $mongoUri = "mongodb://127.0.0.1:27017/"
+}
+
+if ([string]::IsNullOrWhiteSpace($mongoDbName)) {
+    $mongoDbName = "lpr"
+}
+
+Write-Host "INFO MongoDB URI: $mongoUri" -ForegroundColor DarkCyan
+Write-Host "INFO MongoDB DB:  $mongoDbName" -ForegroundColor DarkCyan
 
 # ============================================
 # 3. Check Ports

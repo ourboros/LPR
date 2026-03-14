@@ -4,15 +4,17 @@
 
 const express = require("express");
 const router = express.Router();
+const Score = require("../models/Score");
 
-// 記憶體儲存評分記錄
-const scoreStore = new Map();
+function generateNumericId() {
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
 
 /**
  * POST /api/scores
  * 提交教案評分
  */
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { lessonId, scores, total, comment } = req.body;
 
@@ -37,19 +39,16 @@ router.post("/", (req, res) => {
       scoreValues.reduce((sum, score) => sum + score, 0) / scoreValues.length;
 
     // 建立評分記錄
-    const scoreId = Date.now() + Math.random();
-    const scoreRecord = {
-      id: scoreId,
+    const scoreId = generateNumericId();
+    const scoreRecord = await Score.create({
+      scoreId,
       lessonId,
       scores,
       total: Math.round(calculatedTotal * 10) / 10, // 四捨五入到小數點第一位
       comment: comment || "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // 儲存評分
-    scoreStore.set(scoreId, scoreRecord);
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     res.json({
       success: true,
@@ -70,13 +69,13 @@ router.post("/", (req, res) => {
  * GET /api/scores/lesson/:lessonId
  * 取得特定教案的所有評分
  */
-router.get("/lesson/:lessonId", (req, res) => {
+router.get("/lesson/:lessonId", async (req, res) => {
   try {
     const lessonId = parseFloat(req.params.lessonId);
 
-    const scores = Array.from(scoreStore.values())
-      .filter((score) => score.lessonId === lessonId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const scores = await Score.find({ lessonId }, { _id: 0, __v: 0 })
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json(scores);
   } catch (error) {
@@ -92,10 +91,10 @@ router.get("/lesson/:lessonId", (req, res) => {
  * GET /api/scores/:scoreId
  * 取得特定評分記錄
  */
-router.get("/:scoreId", (req, res) => {
+router.get("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const score = scoreStore.get(scoreId);
+    const score = await Score.findOne({ scoreId }, { _id: 0, __v: 0 }).lean();
 
     if (!score) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
@@ -115,10 +114,10 @@ router.get("/:scoreId", (req, res) => {
  * PUT /api/scores/:scoreId
  * 更新評分記錄
  */
-router.put("/:scoreId", (req, res) => {
+router.put("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const existingScore = scoreStore.get(scoreId);
+    const existingScore = await Score.findOne({ scoreId });
 
     if (!existingScore) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
@@ -151,9 +150,8 @@ router.put("/:scoreId", (req, res) => {
       existingScore.comment = comment;
     }
 
-    existingScore.updatedAt = new Date().toISOString();
-
-    scoreStore.set(scoreId, existingScore);
+    existingScore.updatedAt = new Date();
+    await existingScore.save();
 
     res.json({
       success: true,
@@ -173,16 +171,16 @@ router.put("/:scoreId", (req, res) => {
  * DELETE /api/scores/:scoreId
  * 刪除評分記錄
  */
-router.delete("/:scoreId", (req, res) => {
+router.delete("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const score = scoreStore.get(scoreId);
+    const score = await Score.findOne({ scoreId });
 
     if (!score) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
     }
 
-    scoreStore.delete(scoreId);
+    await Score.deleteOne({ scoreId });
 
     res.json({
       success: true,
@@ -201,11 +199,11 @@ router.delete("/:scoreId", (req, res) => {
  * GET /api/scores
  * 取得所有評分記錄
  */
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const scores = Array.from(scoreStore.values()).sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-    );
+    const scores = await Score.find({}, { _id: 0, __v: 0 })
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json(scores);
   } catch (error) {

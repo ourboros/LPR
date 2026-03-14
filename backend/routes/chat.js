@@ -5,10 +5,10 @@
 const express = require("express");
 const router = express.Router();
 const ragService = require("../services/rag-simple");
+const Lesson = require("../models/Lesson");
 
 // 記憶體儲存（簡單實作）
 const sessions = new Map();
-const lessonStore = new Map();
 
 /**
  * POST /api/chat
@@ -32,13 +32,16 @@ router.post("/", async (req, res) => {
     // 取得選擇的教案內容
     let lessonContent = null;
     if (selectedSources && selectedSources.length > 0) {
-      lessonContent = selectedSources
-        .map((sourceId) => {
-          const lesson = lessonStore.get(sourceId);
-          return lesson ? `【${lesson.name}】\n${lesson.content}` : "";
-        })
-        .filter((content) => content)
-        .join("\n\n");
+      const lessonSections = [];
+
+      for (const sourceId of selectedSources) {
+        const lesson = await findLessonById(sourceId);
+        if (lesson) {
+          lessonSections.push(`【${lesson.name}】\n${lesson.content}`);
+        }
+      }
+
+      lessonContent = lessonSections.join("\n\n");
     }
 
     // 使用 RAG 服務生成回應
@@ -59,11 +62,7 @@ router.post("/", async (req, res) => {
       sessionId: sid,
     });
   } catch (error) {
-    console.error("對話處理錯誤:", error);
-    res.status(500).json({
-      error: "處理對話時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "處理對話時發生錯誤", error);
   }
 });
 
@@ -79,7 +78,7 @@ router.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = lessonStore.get(lessonId);
+    const lesson = await findLessonById(lessonId);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -90,11 +89,7 @@ router.post("/analyze", async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error("分析教案錯誤:", error);
-    res.status(500).json({
-      error: "分析教案時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "分析教案時發生錯誤", error);
   }
 });
 
@@ -110,7 +105,7 @@ router.post("/score", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = lessonStore.get(lessonId);
+    const lesson = await findLessonById(lessonId);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -121,11 +116,7 @@ router.post("/score", async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error("評估教案錯誤:", error);
-    res.status(500).json({
-      error: "評估教案時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "評估教案時發生錯誤", error);
   }
 });
 
@@ -141,7 +132,7 @@ router.post("/suggest", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = lessonStore.get(lessonId);
+    const lesson = await findLessonById(lessonId);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -152,11 +143,7 @@ router.post("/suggest", async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error("生成建議錯誤:", error);
-    res.status(500).json({
-      error: "生成建議時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "生成建議時發生錯誤", error);
   }
 });
 
@@ -172,9 +159,13 @@ router.post("/compare", async (req, res) => {
       return res.status(400).json({ error: "請提供至少兩個教案 ID 進行比較" });
     }
 
-    const lessons = lessonIds
-      .map((id) => lessonStore.get(id))
-      .filter((lesson) => lesson);
+    const lessons = [];
+    for (const id of lessonIds) {
+      const lesson = await findLessonById(id);
+      if (lesson) {
+        lessons.push(lesson);
+      }
+    }
 
     if (lessons.length < 2) {
       return res.status(404).json({ error: "找不到足夠的教案進行比較" });
@@ -193,11 +184,7 @@ router.post("/compare", async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error("比較教案錯誤:", error);
-    res.status(500).json({
-      error: "比較教案時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "比較教案時發生錯誤", error);
   }
 });
 
@@ -277,13 +264,29 @@ ${instruction}
       modifiedComment: modifiedComment.trim(),
     });
   } catch (error) {
-    console.error("評論修改錯誤:", error);
-    res.status(500).json({
-      error: "修改評論時發生錯誤",
-      message: error.message,
-    });
+    handleAiRouteError(res, "修改評論時發生錯誤", error);
   }
 });
+
+function handleAiRouteError(res, fallbackMessage, error) {
+  console.error(`${fallbackMessage}:`, error);
+
+  const message = String(error?.message || "未知錯誤");
+  const isQuotaError =
+    /配額|quota|429|rate limit|resource has been exhausted/i.test(message);
+
+  if (isQuotaError) {
+    return res.status(429).json({
+      error: fallbackMessage,
+      message: "AI API 配額已用盡，請稍後再試或更換可用 API 金鑰。",
+    });
+  }
+
+  return res.status(500).json({
+    error: fallbackMessage,
+    message,
+  });
+}
 
 /**
  * 生成 session ID
@@ -292,7 +295,14 @@ function generateSessionId() {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// 導出 lessonStore 供其他路由使用
-router.lessonStore = lessonStore;
+async function findLessonById(rawLessonId) {
+  const lessonId = parseFloat(rawLessonId);
+
+  if (Number.isNaN(lessonId)) {
+    return null;
+  }
+
+  return Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+}
 
 module.exports = router;
