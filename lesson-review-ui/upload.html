@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>教案上傳 - AI教案評論系統</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./upload.css" />
+  </head>
+  <body>
+    <div class="upload-container">
+      <div class="upload-card">
+        <div class="upload-icon">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+        </div>
+
+        <h1>教案輔助評論系統</h1>
+        <p class="upload-text">請上傳教案來使用教案輔助評論系統</p>
+
+        <form id="uploadForm" class="upload-zone" enctype="multipart/form-data">
+          <input
+            type="file"
+            id="fileInput"
+            name="file"
+            accept=".doc,.docx,.pdf,.txt"
+            hidden
+          />
+          <label for="fileInput" class="upload-label">
+            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+            <span>點擊選擇或拖放檔案</span>
+            <small>支持格式：.doc, .docx, .pdf, .txt</small>
+          </label>
+          <div id="fileName" class="file-name"></div>
+        </form>
+
+        <button id="uploadBtn" class="upload-btn" type="button" disabled>
+          上傳並開始評論
+        </button>
+        <div id="uploadStatus" class="upload-status"></div>
+      </div>
+    </div>
+
+    <script src="./api.js"></script>
+    <script src="./upload.js"></script>
+  </body>
+</html>

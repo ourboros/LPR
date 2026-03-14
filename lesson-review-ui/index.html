@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 教案評論 - 新版介面</title>
+    <script
+      src="https://kit.fontawesome.com/632ceaca97.js"
+      crossorigin="anonymous"
+    ></script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar" aria-label="主要功能選單">
+        <button class="menu-btn" type="button" aria-label="展開選單">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <nav class="nav-list">
+          <button class="nav-item active" type="button" aria-current="page">
+            <i class="nav-icon fa-regular fa-message"></i>
+            <span>AI自由對話</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-review.html'"
+          >
+            <i class="nav-icon fa-solid fa-pen-nib"></i>
+            <span>AI教案評論</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-score.html'"
+          >
+            <i class="nav-icon fa-solid fa-file-pen"></i>
+            <span>紀錄教案評分</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-view.html'"
+          >
+            <i class="nav-icon fa-solid fa-file-lines"></i>
+            <span>查看教案</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="main-panel">
+        <section class="chat-canvas" aria-label="教案評論對話區">
+          <div id="chatList" class="chat-list" role="log" aria-live="polite">
+            <!-- 對話區塊初始為空白 -->
+          </div>
+
+          <div class="quick-actions" aria-label="快速指令">
+            <button
+              class="quick-btn"
+              type="button"
+              data-prompt="請生成教案摘要"
+            >
+              <i class="nav-icon fa-solid fa-file-circle-question"></i>
+              生成教案摘要
+            </button>
+            <button
+              class="quick-btn"
+              type="button"
+              data-prompt="請分析教案結構"
+            >
+              <i class="fa-solid fa-magnifying-glass"></i>
+              分析教案結構
+            </button>
+            <button
+              class="quick-btn"
+              type="button"
+              data-prompt="請提供改進建議"
+            >
+              <i class="fa-regular fa-lightbulb"></i>
+              提供改進建議
+            </button>
+          </div>
+
+          <form id="chatForm" class="composer" autocomplete="off">
+            <label class="sr-only" for="chatInput">輸入訊息</label>
+            <input
+              id="chatInput"
+              name="chatInput"
+              type="text"
+              placeholder="輸入你想請 AI 協助的教案問題..."
+              required
+            />
+            <button
+              id="sendBtn"
+              class="send-btn"
+              type="submit"
+              aria-label="送出訊息"
+            >
+              <i
+                class="fa-regular fa-paper-plane fa-rotate-by"
+                style="--fa-rotate-angle: 45deg"
+              ></i>
+            </button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="./api.js"></script>
+    <script src="./chat.js"></script>
+  </body>
+</html>

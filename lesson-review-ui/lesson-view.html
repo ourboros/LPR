@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>查看教案 - AI教案評論系統</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar" aria-label="主要功能選單">
+        <button class="menu-btn" type="button" aria-label="展開選單">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <nav class="nav-list">
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './index.html'"
+          >
+            <i class="nav-icon fa-solid fa-comment-dots"></i>
+            <span>AI自由對話</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-review.html'"
+          >
+            <i class="nav-icon fa-solid fa-pen-nib"></i>
+            <span>AI教案評論</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-score.html'"
+          >
+            <i class="nav-icon fa-solid fa-clipboard-list"></i>
+            <span>紀錄教案評分</span>
+          </button>
+          <button class="nav-item active" type="button" aria-current="page">
+            <i class="nav-icon fa-solid fa-file-lines"></i>
+            <span>查看教案</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="main-panel">
+        <section class="lesson-view-canvas" aria-label="教案內容預覽">
+          <div class="lesson-view-header">
+            <h2>
+              <i class="fa-solid fa-file-pdf"></i>
+              教案內容預覽
+            </h2>
+            <button
+              class="action-btn"
+              onclick="window.location.href = './upload.html'"
+            >
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              重新上傳
+            </button>
+          </div>
+
+          <div id="lessonContent" class="lesson-preview-content">
+            <div class="lesson-meta">
+              <p>
+                <strong>檔案名稱：</strong
+                ><span id="lessonFileName">載入中...</span>
+              </p>
+              <p>
+                <strong>上傳時間：</strong
+                ><span id="lessonUploadDate">載入中...</span>
+              </p>
+            </div>
+
+            <div class="lesson-text">
+              <div id="lessonText">正在載入教案內容...</div>
+              <div class="lesson-note">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>此頁將顯示目前選取教案的完整內容。</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="lesson-view-actions">
+            <button
+              class="primary-btn"
+              onclick="window.location.href = './lesson-review.html'"
+            >
+              <i class="fa-solid fa-comments"></i>
+              前往評論頁面
+            </button>
+            <button
+              class="secondary-btn"
+              onclick="window.location.href = './upload.html'"
+            >
+              <i class="fa-solid fa-rotate-left"></i>
+              返回上傳頁面
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./api.js"></script>
+    <script src="./lesson-view.js"></script>
+  </body>
+</html>

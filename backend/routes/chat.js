@@ -229,6 +229,63 @@ router.get("/criteria", (req, res) => {
 });
 
 /**
+ * POST /api/chat/modify-comment
+ * 使用 AI 修改選取的評論
+ */
+router.post("/modify-comment", async (req, res) => {
+  try {
+    const { originalComment, instruction } = req.body;
+
+    // 驗證輸入
+    if (!originalComment || typeof originalComment !== "string") {
+      return res.status(400).json({
+        error: "請提供原始評論",
+      });
+    }
+
+    if (!instruction || typeof instruction !== "string") {
+      return res.status(400).json({
+        error: "請提供修改指示",
+      });
+    }
+
+    // 建構 AI 提示詞
+    const prompt = `你是專業的教育教案評論修改助手。
+請根據以下指示修改原始評論：
+
+【原始評論】
+${originalComment}
+
+【修改指示】
+${instruction}
+
+【要求】
+1. 保持專業教育評論風格
+2. 只輸出修改後的評論文字，不要加任何前綴說明（如「修改後的評論：」）
+3. 保持評論的完整性和連貫性
+4. 根據指示調整語氣、內容或結構
+5. 回應長度應與原始評論相近
+
+請直接輸出修改後的評論：`;
+
+    // 呼叫 Gemini API
+    const geminiClient = require("../services/geminiClient");
+    const modifiedComment = await geminiClient.generateResponse(prompt);
+
+    res.json({
+      success: true,
+      modifiedComment: modifiedComment.trim(),
+    });
+  } catch (error) {
+    console.error("評論修改錯誤:", error);
+    res.status(500).json({
+      error: "修改評論時發生錯誤",
+      message: error.message,
+    });
+  }
+});
+
+/**
  * 生成 session ID
  */
 function generateSessionId() {

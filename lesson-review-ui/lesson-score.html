@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>紀錄教案評分 - AI教案評論系統</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar" aria-label="主要功能選單">
+        <button class="menu-btn" type="button" aria-label="展開選單">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <nav class="nav-list">
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './index.html'"
+          >
+            <i class="nav-icon fa-solid fa-comment-dots"></i>
+            <span>AI自由對話</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-review.html'"
+          >
+            <i class="nav-icon fa-solid fa-pen-nib"></i>
+            <span>AI教案評論</span>
+          </button>
+          <button class="nav-item active" type="button" aria-current="page">
+            <i class="nav-icon fa-solid fa-clipboard-list"></i>
+            <span>紀錄教案評分</span>
+          </button>
+          <button
+            class="nav-item"
+            type="button"
+            onclick="window.location.href = './lesson-view.html'"
+          >
+            <i class="nav-icon fa-solid fa-file-lines"></i>
+            <span>查看教案</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="main-panel">
+        <section class="score-canvas" aria-label="教案評分區">
+          <!-- 評分項目區 -->
+          <div class="rating-section">
+            <!-- 評分維度 1 -->
+            <div class="rating-item" data-dimension="structure">
+              <span class="rating-label">教案架構與設計理念</span>
+              <div class="star-rating" data-value="0">
+                <i class="fa-regular fa-star" data-star="1"></i>
+                <i class="fa-regular fa-star" data-star="2"></i>
+                <i class="fa-regular fa-star" data-star="3"></i>
+                <i class="fa-regular fa-star" data-star="4"></i>
+                <i class="fa-regular fa-star" data-star="5"></i>
+              </div>
+            </div>
+
+            <!-- 評分維度 2 -->
+            <div class="rating-item" data-dimension="objectives">
+              <span class="rating-label">目標設定與課綱符合度</span>
+              <div class="star-rating" data-value="0">
+                <i class="fa-regular fa-star" data-star="1"></i>
+                <i class="fa-regular fa-star" data-star="2"></i>
+                <i class="fa-regular fa-star" data-star="3"></i>
+                <i class="fa-regular fa-star" data-star="4"></i>
+                <i class="fa-regular fa-star" data-star="5"></i>
+              </div>
+            </div>
+
+            <!-- 評分維度 3 -->
+            <div class="rating-item" data-dimension="activities">
+              <span class="rating-label">教學活動與邏輯安排</span>
+              <div class="star-rating" data-value="0">
+                <i class="fa-regular fa-star" data-star="1"></i>
+                <i class="fa-regular fa-star" data-star="2"></i>
+                <i class="fa-regular fa-star" data-star="3"></i>
+                <i class="fa-regular fa-star" data-star="4"></i>
+                <i class="fa-regular fa-star" data-star="5"></i>
+              </div>
+            </div>
+
+            <!-- 評分維度 4 -->
+            <div class="rating-item" data-dimension="methods">
+              <span class="rating-label">教學方法、資源與創意</span>
+              <div class="star-rating" data-value="0">
+                <i class="fa-regular fa-star" data-star="1"></i>
+                <i class="fa-regular fa-star" data-star="2"></i>
+                <i class="fa-regular fa-star" data-star="3"></i>
+                <i class="fa-regular fa-star" data-star="4"></i>
+                <i class="fa-regular fa-star" data-star="5"></i>
+              </div>
+            </div>
+
+            <!-- 評分維度 5 -->
+            <div class="rating-item" data-dimension="assessment">
+              <span class="rating-label">評量策略與時間分配</span>
+              <div class="star-rating" data-value="0">
+                <i class="fa-regular fa-star" data-star="1"></i>
+                <i class="fa-regular fa-star" data-star="2"></i>
+                <i class="fa-regular fa-star" data-star="3"></i>
+                <i class="fa-regular fa-star" data-star="4"></i>
+                <i class="fa-regular fa-star" data-star="5"></i>
+              </div>
+            </div>
+            <!-- 總體評分區 -->
+            <div class="total-score-section">
+              <div class="total-score-box">
+                <span class="total-score-label">總體評分</span>
+                <span class="total-score-value" id="totalScoreValue"
+                  >0.0/5.0</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="score-bottom-row">
+            <!-- 評分說明區 -->
+            <div class="comment-section">
+              <textarea
+                id="scoreComment"
+                class="score-comment-input"
+                placeholder="評分說明與建議"
+                rows="4"
+              ></textarea>
+            </div>
+
+            <!-- 操作按鈕區 -->
+            <div class="score-actions">
+              <button
+                id="resetBtn"
+                class="score-btn score-btn--secondary"
+                type="button"
+              >
+                重置評分
+              </button>
+              <button
+                id="saveBtn"
+                class="score-btn score-btn--primary"
+                type="button"
+              >
+                儲存評分
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./api.js"></script>
+    <script src="./lesson-score.js"></script>
+  </body>
+</html>
