@@ -20,7 +20,7 @@ class GeminiClient {
    * @param {Array} history - 對話歷史 (可選)
    * @returns {Promise<string>} AI 回應文本
    */
-  async generateResponse(prompt, history = []) {
+  async generateResponse(prompt, history = [], generationConfig = {}) {
     try {
       const model = this.genAI.getGenerativeModel({
         model: this.modelName,
@@ -29,6 +29,7 @@ class GeminiClient {
           topP: 0.9,
           topK: 40,
           maxOutputTokens: 2048,
+          ...generationConfig,
         },
       });
 

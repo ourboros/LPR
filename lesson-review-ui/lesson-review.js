@@ -83,6 +83,8 @@ async function requestReview(message, options = {}) {
         selectedSources: [parseFloat(lessonId)],
         chatHistory: reviewHistory,
         sessionId: currentSessionId || undefined,
+        mode: "review-formal",
+        action: "review-formal",
       },
     });
 

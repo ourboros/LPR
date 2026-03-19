@@ -76,6 +76,15 @@ node server.js
 - `POST /api/scores`
 - `GET /api/scores/lesson/:lessonId`
 
+## 6.1 對話模式說明
+
+目前前端會在請求中傳送 `mode/action/maxChars`：
+
+- 首頁自動摘要：`mode=summary`, `maxChars=500`
+- 快速按鈕：`mode=quick-action`, `action=summary|analyze|suggest`, `maxChars=300`
+- 自由輸入：`mode=chat-free`
+- 教案評論頁：`mode=review-formal`
+
 ## 7. 常見問題
 
 ### 問題 A：腳本執行政策限制

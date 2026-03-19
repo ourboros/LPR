@@ -5,12 +5,17 @@
 const fs = require("fs");
 const path = require("path");
 const geminiClient = require("./geminiClient");
+const promptService = require("./promptService");
+const SearchEngineFactory = require("./search/SearchEngineFactory");
 
 class RAGSimpleService {
   constructor() {
     this.criteria = null;
     this.essentials = null;
     this.guidelines = null;
+    this.searchEngine = SearchEngineFactory.create(
+      process.env.SEARCH_ENGINE || "simple",
+    );
     this.loadData();
   }
 
@@ -91,60 +96,17 @@ class RAGSimpleService {
    * @param {string} query - 用戶問題
    * @returns {Array} 相關的評分標準
    */
-  findRelevantCriteria(query) {
-    // 簡化版：返回所有標準（因為不使用向量搜尋）
-    // 可以根據關鍵字做簡單過濾
-    const keywords = this.extractKeywords(query);
+  async findRelevantCriteria(query) {
+    const results = await this.searchEngine.search(query, {
+      criteria: this.criteria,
+      limit: this.criteria.length,
+    });
 
-    if (keywords.length === 0) {
-      return this.criteria; // 返回全部
+    if (!results || results.length === 0) {
+      return this.criteria;
     }
 
-    // 簡單的關鍵字匹配
-    const relevant = this.criteria.filter((criterion) => {
-      const searchText =
-        `${criterion.title} ${criterion.description} ${criterion.category}`.toLowerCase();
-      return keywords.some((keyword) =>
-        searchText.includes(keyword.toLowerCase()),
-      );
-    });
-
-    // 如果沒有匹配，返回全部
-    return relevant.length > 0 ? relevant : this.criteria;
-  }
-
-  /**
-   * 從問題中提取關鍵字
-   * @param {string} query - 用戶問題
-   * @returns {Array} 關鍵字陣列
-   */
-  extractKeywords(query) {
-    const keywords = [];
-    const terms = [
-      "目標",
-      "教學目標",
-      "教材",
-      "教學方法",
-      "活動",
-      "時間",
-      "評量",
-      "結構",
-      "階段",
-      "資源",
-      "工具",
-      "創意",
-      "動機",
-      "學生",
-      "設計",
-    ];
-
-    terms.forEach((term) => {
-      if (query.includes(term)) {
-        keywords.push(term);
-      }
-    });
-
-    return keywords;
+    return results;
   }
 
   /**
@@ -154,86 +116,88 @@ class RAGSimpleService {
    * @param {Array} chatHistory - 對話歷史
    * @returns {Promise<Object>} AI 回應
    */
-  async generateComment(userMessage, lessonContent = null, chatHistory = []) {
+  async generateComment(
+    userMessage,
+    lessonContent = null,
+    chatHistory = [],
+    options = {},
+  ) {
     try {
+      const { mode = "chat-free", action = "free", maxChars } = options;
       const criteriaContext = this.buildCriteriaContext();
+      const policy = promptService.getModePolicy(mode, action, maxChars);
 
-      // 建構專業的系統 prompt
-      const systemPrompt = `你是一位專業的教案評論專家。
-
-${criteriaContext}
-
-【評論輸出格式】（嚴格遵守）
-
-總字數：500 字以內
-
-結構：
-### 總體評價
-（50-80字：定位此教案的完整性，如「此教案接近教學大綱而非正式教案」或「此教案架構完整但評量不足」）
-
-### 一、教案優點 (Strengths)
-1. **[優點標題]**：描述（30-50字）
-2. **[優點標題]**：描述（30-50字）
-3. **[優點標題]**：描述（30-50字）
-
-### 二、教案缺點與待改進之處 (Weaknesses)
-#### 1. [問題標題] (Missing/Weak [Element])
-- **缺失：** 具體說明
-- **影響：** 對教學的影響
-
-#### 2. [問題標題]
-（重複上述格式，3-5個關鍵問題）
-
-### 三、修改建議 (Modification Suggestions)
-#### 1. [建議標題]
-具體步驟（條列式）
-
-#### 2. [建議標題]
-具體步驟
-
-**總結建議：** 一句話總結核心改進方向
-
----
-**【核心要素檢核】**
-✅ 已具備：[列出項目]
-❌ 缺失：[列出項目]
-
-【重要規則】
-1. 不要逐一評論 11 個評分標準
-2. 將問題整合為 3-5 個關鍵缺失（依據五大評鑑面向）
-3. 優點最多 3 點，缺點 3-5 點
-4. 每個缺點必須指出「缺失」與「影響」
-5. 修改建議要具體可執行
-6. 核心要素檢核僅列出缺失項目即可（全部具備則省略此段）
-7. 語氣專業、明確，避免過度委婉`;
-
-      let fullPrompt = systemPrompt + "\n\n";
-
-      if (lessonContent) {
-        fullPrompt += `【教案內容】\n${lessonContent}\n\n`;
-      } else {
-        fullPrompt += `【教案內容】\n（尚未提供教案內容）\n\n`;
-      }
-
-      fullPrompt += `【用戶問題】\n${userMessage}\n\n`;
-      fullPrompt += `請依照上述格式提供專業評論。`;
+      const fullPrompt = promptService.buildPrompt({
+        mode: policy.mode,
+        action: policy.action,
+        userMessage,
+        lessonContent,
+        criteriaContext,
+      });
 
       // 呼叫 Gemini API
-      const response = await geminiClient.generateResponse(
+      const rawResponse = await geminiClient.generateResponse(
         fullPrompt,
         chatHistory,
+        {
+          maxOutputTokens: policy.maxOutputTokens,
+          temperature: mode === "quick-action" ? 0.45 : 0.7,
+        },
       );
+
+      const content = await this.enforceMaxChars(
+        rawResponse,
+        policy.maxChars,
+        lessonContent,
+        mode,
+        action,
+      );
+
+      const related = await this.findRelevantCriteria(userMessage);
 
       return {
         role: "assistant",
-        content: response,
-        sources: this.findRelevantCriteria(userMessage).map((c) => c.id),
+        content,
+        sources: related.map((c) => c.id),
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error("生成評論失敗:", error);
       throw error;
     }
+  }
+
+  async enforceMaxChars(text, maxChars, lessonContent, mode, action) {
+    if (!maxChars || !Number.isFinite(maxChars) || maxChars <= 0) {
+      return String(text || "").trim();
+    }
+
+    const normalized = String(text || "").trim();
+    if (normalized.length <= maxChars) {
+      return normalized;
+    }
+
+    const compressPrompt = `請將以下內容濃縮為 ${maxChars} 字以內，保留核心重點，禁止超過上限。\n\n【模式】${mode}/${action}\n\n【原始內容】\n${normalized}\n\n【教案內容節錄】\n${String(lessonContent || "").slice(0, 800)}\n\n請直接輸出濃縮結果。`;
+
+    try {
+      const compressed = await geminiClient.generateResponse(
+        compressPrompt,
+        [],
+        {
+          temperature: 0.2,
+          maxOutputTokens: 700,
+        },
+      );
+
+      const compact = String(compressed || "").trim();
+      if (compact.length <= maxChars) {
+        return compact;
+      }
+    } catch (error) {
+      console.warn("壓縮回應失敗，改用硬切字數:", error.message);
+    }
+
+    return normalized.slice(0, maxChars).trim();
   }
 
   /**

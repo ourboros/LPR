@@ -78,31 +78,42 @@ function appendSystemMessage(text) {
   chatList.appendChild(message);
 }
 
-async function callChatApi(message, mode = "chat") {
+async function callChatApi(message, options = {}) {
+  const { mode = "chat-free", action = "free", maxChars } = options;
+
   const lessonId = window.LPR.getCurrentLessonId();
 
   if (!lessonId) {
     throw new Error("尚未選擇教案，請先回到上傳頁上傳教案");
   }
 
-  if (mode === "analyze") {
+  if (mode === "quick-action" && action === "analyze") {
     return window.LPR.request("/chat/analyze", {
       method: "POST",
-      body: { lessonId: parseFloat(lessonId) },
+      body: {
+        lessonId: parseFloat(lessonId),
+        maxChars,
+      },
     });
   }
 
-  if (mode === "suggest") {
+  if (mode === "quick-action" && action === "suggest") {
     return window.LPR.request("/chat/suggest", {
       method: "POST",
-      body: { lessonId: parseFloat(lessonId) },
+      body: {
+        lessonId: parseFloat(lessonId),
+        maxChars,
+      },
     });
   }
 
-  if (mode === "score") {
+  if (mode === "quick-action" && action === "score") {
     return window.LPR.request("/chat/score", {
       method: "POST",
-      body: { lessonId: parseFloat(lessonId) },
+      body: {
+        lessonId: parseFloat(lessonId),
+        maxChars,
+      },
     });
   }
 
@@ -113,12 +124,20 @@ async function callChatApi(message, mode = "chat") {
       selectedSources: [parseFloat(lessonId)],
       chatHistory,
       sessionId: currentSessionId || undefined,
+      mode,
+      action,
+      maxChars,
     },
   });
 }
 
 async function requestAssistantReply(message, options = {}) {
-  const { mode = "chat", showUser = true } = options;
+  const {
+    mode = "chat-free",
+    action = "free",
+    maxChars,
+    showUser = true,
+  } = options;
 
   if (!message) {
     return;
@@ -131,7 +150,11 @@ async function requestAssistantReply(message, options = {}) {
   const loadingBubble = appendLoadingBubble();
 
   try {
-    const data = await callChatApi(message, mode);
+    const data = await callChatApi(message, {
+      mode,
+      action,
+      maxChars,
+    });
     currentSessionId = data.sessionId || currentSessionId;
     if (currentSessionId) {
       sessionStorage.setItem(CHAT_SESSION_KEY, currentSessionId);
@@ -148,7 +171,13 @@ async function requestAssistantReply(message, options = {}) {
   }
 }
 
-function inferQuickMode(prompt) {
+function inferQuickAction(button) {
+  const action = button?.dataset?.action;
+  if (action) {
+    return action;
+  }
+
+  const prompt = button?.dataset?.prompt || "";
   if (prompt === "請分析教案結構") {
     return "analyze";
   }
@@ -157,7 +186,7 @@ function inferQuickMode(prompt) {
     return "suggest";
   }
 
-  return "chat";
+  return "summary";
 }
 
 applySidebarState();
@@ -175,7 +204,10 @@ if (chatForm && chatInput) {
     const message = chatInput.value.trim();
     chatInput.value = "";
     chatInput.focus();
-    await requestAssistantReply(message);
+    await requestAssistantReply(message, {
+      mode: "chat-free",
+      action: "free",
+    });
   });
 }
 
@@ -183,7 +215,12 @@ if (chatInput && quickButtons.length > 0) {
   quickButtons.forEach((button) => {
     button.addEventListener("click", async () => {
       const prompt = button.dataset.prompt || "";
-      await requestAssistantReply(prompt, { mode: inferQuickMode(prompt) });
+      const action = inferQuickAction(button);
+      await requestAssistantReply(prompt, {
+        mode: "quick-action",
+        action,
+        maxChars: 300,
+      });
       chatInput.focus();
     });
   });
@@ -205,6 +242,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await requestAssistantReply("請生成教案摘要", {
     showUser: false,
-    mode: "chat",
+    mode: "summary",
+    action: "summary",
+    maxChars: 500,
   });
 });

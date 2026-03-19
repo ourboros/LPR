@@ -60,8 +60,18 @@
 
 - `MONGODB_URI`：預設 `mongodb://127.0.0.1:27017/`
 - `MONGODB_DB_NAME`：預設 `lpr`
+- `SEARCH_ENGINE`：預設 `simple`（已預留向量搜尋抽象層）
 
 若未設定環境變數，系統會使用上述預設值。
+
+## 對話模式分流
+
+對話 API 已採模式分流：
+
+- `summary`：首頁自動摘要，嚴格限制在 500 字內
+- `quick-action`：快速按鈕（summary/analyze/suggest），嚴格限制在 300 字內
+- `chat-free`：自由對話，不套固定評論模板
+- `review-formal`：教案評論頁的正式評論模式
 
 ## 目錄重點
 

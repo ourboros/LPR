@@ -16,7 +16,15 @@ const sessions = new Map();
  */
 router.post("/", async (req, res) => {
   try {
-    const { message, selectedSources, chatHistory, sessionId } = req.body;
+    const {
+      message,
+      selectedSources,
+      chatHistory,
+      sessionId,
+      mode,
+      action,
+      maxChars,
+    } = req.body;
 
     // 驗證輸入
     if (!message || typeof message !== "string") {
@@ -49,6 +57,11 @@ router.post("/", async (req, res) => {
       message,
       lessonContent,
       chatHistory || history,
+      {
+        mode: normalizeMode(mode),
+        action: normalizeAction(action),
+        maxChars: normalizeMaxChars(maxChars),
+      },
     );
 
     // 更新對話歷史
@@ -72,7 +85,7 @@ router.post("/", async (req, res) => {
  */
 router.post("/analyze", async (req, res) => {
   try {
-    const { lessonId } = req.body;
+    const { lessonId, maxChars } = req.body;
 
     if (!lessonId) {
       return res.status(400).json({ error: "請提供教案 ID" });
@@ -85,7 +98,16 @@ router.post("/analyze", async (req, res) => {
 
     const message =
       "請分析這份教案的結構完整性、各階段安排是否合理，並提供改進建議。";
-    const response = await ragService.generateComment(message, lesson.content);
+    const response = await ragService.generateComment(
+      message,
+      lesson.content,
+      [],
+      {
+        mode: "quick-action",
+        action: "analyze",
+        maxChars: normalizeMaxChars(maxChars, 300),
+      },
+    );
 
     res.json(response);
   } catch (error) {
@@ -99,7 +121,7 @@ router.post("/analyze", async (req, res) => {
  */
 router.post("/score", async (req, res) => {
   try {
-    const { lessonId } = req.body;
+    const { lessonId, maxChars } = req.body;
 
     if (!lessonId) {
       return res.status(400).json({ error: "請提供教案 ID" });
@@ -112,7 +134,16 @@ router.post("/score", async (req, res) => {
 
     const message =
       "請根據評分標準，對這份教案進行全面評估，並給出各維度的評分建議（1-5分）。";
-    const response = await ragService.generateComment(message, lesson.content);
+    const response = await ragService.generateComment(
+      message,
+      lesson.content,
+      [],
+      {
+        mode: "quick-action",
+        action: "score",
+        maxChars: normalizeMaxChars(maxChars, 300),
+      },
+    );
 
     res.json(response);
   } catch (error) {
@@ -126,7 +157,7 @@ router.post("/score", async (req, res) => {
  */
 router.post("/suggest", async (req, res) => {
   try {
-    const { lessonId } = req.body;
+    const { lessonId, maxChars } = req.body;
 
     if (!lessonId) {
       return res.status(400).json({ error: "請提供教案 ID" });
@@ -139,7 +170,16 @@ router.post("/suggest", async (req, res) => {
 
     const message =
       "請針對這份教案提供具體的改進建議，包括優點強化和弱點改善的方向。";
-    const response = await ragService.generateComment(message, lesson.content);
+    const response = await ragService.generateComment(
+      message,
+      lesson.content,
+      [],
+      {
+        mode: "quick-action",
+        action: "suggest",
+        maxChars: normalizeMaxChars(maxChars, 300),
+      },
+    );
 
     res.json(response);
   } catch (error) {
@@ -180,7 +220,15 @@ router.post("/compare", async (req, res) => {
 
     const message =
       "請比較這些教案的優缺點，分析各自的特色和可以互相學習的地方。";
-    const response = await ragService.generateComment(message, lessonContent);
+    const response = await ragService.generateComment(
+      message,
+      lessonContent,
+      [],
+      {
+        mode: "chat-free",
+        action: "compare",
+      },
+    );
 
     res.json(response);
   } catch (error) {
@@ -293,6 +341,34 @@ function handleAiRouteError(res, fallbackMessage, error) {
  */
 function generateSessionId() {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function normalizeMode(mode) {
+  const allowed = new Set([
+    "summary",
+    "quick-action",
+    "chat-free",
+    "review-formal",
+  ]);
+  return allowed.has(mode) ? mode : "chat-free";
+}
+
+function normalizeAction(action) {
+  if (!action || typeof action !== "string") {
+    return "free";
+  }
+
+  return action;
+}
+
+function normalizeMaxChars(maxChars, fallback) {
+  const parsed = Number.parseInt(maxChars, 10);
+
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return fallback;
 }
 
 async function findLessonById(rawLessonId) {
