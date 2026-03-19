@@ -6,6 +6,12 @@
 .\start.ps1
 ```
 
+若不想自動開啟瀏覽器：
+
+```powershell
+.\start.ps1 -NoBrowser
+```
+
 啟動後：
 
 - 後端 API：`http://localhost:5000`
@@ -22,6 +28,8 @@
 - `MONGODB_DB_NAME`（預設：`lpr`）
 
 可先用 `backend/.env.example` 建立你的 `.env`。
+
+若 `backend/.env` 缺少必要設定（例如 `GEMINI_API_KEY`），`start.ps1` 會在啟動前直接提示並停止。
 
 ## 2. 停止服務
 

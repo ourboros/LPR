@@ -9,7 +9,8 @@
 # ============================================
 
 param(
-    [switch]$LegacyFrontend
+    [switch]$LegacyFrontend,
+    [switch]$NoBrowser
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -31,6 +32,37 @@ function Get-EnvFileValue {
     }
 
     return ($line -split "=", 2)[1]
+}
+
+function Show-RecentBackendLogs {
+    param(
+        $Job,
+        [int]$LineCount = 30
+    )
+
+    if (-not $Job) {
+        return
+    }
+
+    $jobOutput = @(Receive-Job $Job -Keep -ErrorAction SilentlyContinue)
+
+    if (-not $jobOutput -or $jobOutput.Count -eq 0) {
+        Write-Host "No backend logs available." -ForegroundColor DarkYellow
+        return
+    }
+
+    Write-Host "Showing last $LineCount backend log lines:" -ForegroundColor Yellow
+    $jobOutput | Select-Object -Last $LineCount | ForEach-Object {
+        Write-Host $_
+    }
+}
+
+function Test-EnvValuePresent {
+    param(
+        [string]$Value
+    )
+
+    return -not [string]::IsNullOrWhiteSpace($Value) -and $Value -ne "your_api_key_here"
 }
 
 Write-Host ""
@@ -74,6 +106,14 @@ if (-not (Test-Path $backendNodeModules)) {
 $envFilePath = ".\backend\.env"
 $mongoUri = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI"
 $mongoDbName = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_DB_NAME"
+$geminiApiKey = Get-EnvFileValue -FilePath $envFilePath -Key "GEMINI_API_KEY"
+
+if (-not (Test-Path $envFilePath)) {
+    Write-Host "ERROR Missing backend/.env" -ForegroundColor Red
+    Write-Host "Please create backend/.env from backend/.env.example first." -ForegroundColor Yellow
+    pause
+    exit 1
+}
 
 if ([string]::IsNullOrWhiteSpace($mongoUri)) {
     $mongoUri = "mongodb://127.0.0.1:27017/"
@@ -81,6 +121,28 @@ if ([string]::IsNullOrWhiteSpace($mongoUri)) {
 
 if ([string]::IsNullOrWhiteSpace($mongoDbName)) {
     $mongoDbName = "lpr"
+}
+
+$missingEnvKeys = @()
+
+if (-not (Test-EnvValuePresent $geminiApiKey)) {
+    $missingEnvKeys += "GEMINI_API_KEY"
+}
+
+if (-not (Test-EnvValuePresent $mongoUri)) {
+    $missingEnvKeys += "MONGODB_URI"
+}
+
+if (-not (Test-EnvValuePresent $mongoDbName)) {
+    $missingEnvKeys += "MONGODB_DB_NAME"
+}
+
+if ($missingEnvKeys.Count -gt 0) {
+    Write-Host "ERROR Missing or invalid .env settings:" -ForegroundColor Red
+    $missingEnvKeys | ForEach-Object { Write-Host "- $_" -ForegroundColor Yellow }
+    Write-Host "Please update backend/.env before starting the system." -ForegroundColor Yellow
+    pause
+    exit 1
 }
 
 Write-Host "INFO MongoDB URI: $mongoUri" -ForegroundColor DarkCyan
@@ -120,18 +182,30 @@ $backendJob = Start-Job -Name "LPR-Backend" -ScriptBlock {
     node server.js
 }
 
-Start-Sleep -Seconds 3
+$backendReady = $false
 
-# Check backend health
-try {
-    $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+for ($attempt = 1; $attempt -le 10; $attempt++) {
+    Start-Sleep -Seconds 1
+
+    try {
+        $null = Invoke-WebRequest -Uri "http://localhost:5000/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        $backendReady = $true
+        break
+    } catch {
+        if ($backendJob.State -eq "Failed" -or $backendJob.State -eq "Completed" -or $backendJob.State -eq "Stopped") {
+            break
+        }
+    }
+}
+
+if ($backendReady) {
     Write-Host "OK Backend server running (Job ID: $($backendJob.Id))" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "ERROR Backend failed to start" -ForegroundColor Red
     Write-Host "Checking logs:" -ForegroundColor Yellow
-    Receive-Job $backendJob
-    Stop-Job $backendJob
-    Remove-Job $backendJob
+    Show-RecentBackendLogs -Job $backendJob -LineCount 30
+    Stop-Job $backendJob -ErrorAction SilentlyContinue
+    Remove-Job $backendJob -ErrorAction SilentlyContinue
     pause
     exit 1
 }
@@ -167,35 +241,40 @@ if ($LegacyFrontend) {
     Write-Host "Legacy UI: http://localhost:3000" -ForegroundColor Cyan
 }
 Write-Host ""
-Write-Host "Opening Chrome browser..." -ForegroundColor Yellow
 
-Start-Sleep -Seconds 1
+if ($NoBrowser) {
+    Write-Host "Skipping browser launch (-NoBrowser)." -ForegroundColor Yellow
+} else {
+    Write-Host "Opening Chrome browser..." -ForegroundColor Yellow
 
-# Try Chrome paths
-$chromePaths = @(
-    "C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
-)
+    Start-Sleep -Seconds 1
 
-$opened = $false
-foreach ($path in $chromePaths) {
-    if (Test-Path $path) {
-        Start-Process $path "http://localhost:5000/app/upload.html"
-        $opened = $true
-        Write-Host "OK Browser opened" -ForegroundColor Green
-        break
+    # Try Chrome paths
+    $chromePaths = @(
+        "C:\Program Files\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+    )
+
+    $opened = $false
+    foreach ($path in $chromePaths) {
+        if (Test-Path $path) {
+            Start-Process $path "http://localhost:5000/app/upload.html"
+            $opened = $true
+            Write-Host "OK Browser opened" -ForegroundColor Green
+            break
+        }
     }
-}
 
-if (-not $opened) {
-    # Try default browser
-    try {
-        Start-Process "http://localhost:5000/app/upload.html"
-        Write-Host "OK Browser opened (default)" -ForegroundColor Green
-    } catch {
-        Write-Host "WARNING Could not open browser automatically" -ForegroundColor Yellow
-        Write-Host "Please visit: http://localhost:5000/app/upload.html" -ForegroundColor Cyan
+    if (-not $opened) {
+        # Try default browser
+        try {
+            Start-Process "http://localhost:5000/app/upload.html"
+            Write-Host "OK Browser opened (default)" -ForegroundColor Green
+        } catch {
+            Write-Host "WARNING Could not open browser automatically" -ForegroundColor Yellow
+            Write-Host "Please visit: http://localhost:5000/app/upload.html" -ForegroundColor Cyan
+        }
     }
 }
 
@@ -205,6 +284,7 @@ Write-Host "  Instructions" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "- Stop servers: .\stop.ps1" -ForegroundColor White
 Write-Host "- Legacy mode:  .\start.ps1 -LegacyFrontend" -ForegroundColor White
+Write-Host "- No browser:   .\start.ps1 -NoBrowser" -ForegroundColor White
 Write-Host "- View logs: Get-Job | Receive-Job" -ForegroundColor White
 Write-Host "- Backend health: http://localhost:5000/health" -ForegroundColor White
 Write-Host ""

@@ -1,4 +1,4 @@
-# LPR - AI 教案評論系統（New UI）
+# LPR(Lesson plan review) - AI 教案評論系統（New UI）
 
 本專案已切換為多頁式新介面，正式前端位於 `lesson-review-ui/`，並由後端同源提供。
 
