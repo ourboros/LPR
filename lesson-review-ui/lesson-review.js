@@ -23,42 +23,22 @@ let selectedOriginalText = "";
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
 
-function normalizeAssistantText(text) {
-  return (
-    String(text || "")
-      .replace(/\r\n/g, "\n")
-      // 移除 Markdown 標題符號（行首 #、##、### ...）
-      .replace(/^\s{0,3}#{1,6}\s*/gm, "")
-      .trim()
-  );
-}
-
-function renderReviewParagraphs(bubble, text) {
-  const normalized = normalizeAssistantText(text);
-
-  // 依空行分段，單段內保留換行
-  const paragraphs = normalized
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  if (paragraphs.length === 0) {
-    bubble.textContent = "AI 未回傳評論內容。";
+function renderReviewContent(bubble, text) {
+  if (window.LPRMarkdown?.renderToContainer) {
+    window.LPRMarkdown.renderToContainer(bubble, text, {
+      className: "markdown-content",
+      emptyText: "AI 未回傳評論內容。",
+    });
     return;
   }
 
-  paragraphs.forEach((paragraph) => {
-    const p = document.createElement("p");
-    p.className = "review-paragraph";
-    p.textContent = paragraph;
-    bubble.appendChild(p);
-  });
+  bubble.textContent = String(text || "").trim() || "AI 未回傳評論內容。";
 }
 
 function createReviewBubble(content) {
   const bubble = document.createElement("article");
   bubble.className = "review-bubble";
-  renderReviewParagraphs(bubble, content);
+  renderReviewContent(bubble, content);
   reviewResult.appendChild(bubble);
   reviewResult.scrollTop = reviewResult.scrollHeight;
   return bubble;

@@ -200,12 +200,76 @@ body {
   white-space: pre-wrap;
 }
 
-.bubble-ai .ai-paragraph {
+.bubble-ai.markdown-content,
+.review-bubble.markdown-content {
+  white-space: normal;
+}
+
+.bubble-ai.markdown-content :is(h1, h2, h3, h4, h5, h6),
+.review-bubble.markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.45em 0 0.35em;
+  line-height: 1.35;
+}
+
+.bubble-ai.markdown-content p,
+.review-bubble.markdown-content p {
   margin: 0;
 }
 
-.bubble-ai .ai-paragraph + .ai-paragraph {
-  margin-top: 12px;
+.bubble-ai.markdown-content p + p,
+.review-bubble.markdown-content p + p {
+  margin-top: 10px;
+}
+
+.bubble-ai.markdown-content :is(ul, ol),
+.review-bubble.markdown-content :is(ul, ol) {
+  margin: 8px 0;
+  padding-left: 1.35rem;
+}
+
+.bubble-ai.markdown-content li,
+.review-bubble.markdown-content li {
+  margin: 4px 0;
+}
+
+.bubble-ai.markdown-content blockquote,
+.review-bubble.markdown-content blockquote {
+  margin: 10px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--color-action);
+  color: #1f2742;
+}
+
+.bubble-ai.markdown-content code,
+.review-bubble.markdown-content code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: #e4e9f3;
+}
+
+.bubble-ai.markdown-content pre,
+.review-bubble.markdown-content pre {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #101935;
+  color: #f7f9ff;
+  overflow-x: auto;
+}
+
+.bubble-ai.markdown-content pre code,
+.review-bubble.markdown-content pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.bubble-ai.markdown-content a,
+.review-bubble.markdown-content a {
+  color: #1d2f7a;
+  text-decoration: underline;
 }
 
 .quick-actions {
@@ -427,14 +491,6 @@ body {
   min-height: auto;
   height: auto;
   white-space: pre-wrap;
-}
-
-.review-bubble .review-paragraph {
-  margin: 0;
-}
-
-.review-bubble .review-paragraph + .review-paragraph {
-  margin-top: 12px;
 }
 
 .user-message {

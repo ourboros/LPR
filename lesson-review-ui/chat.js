@@ -30,34 +30,16 @@ function persistSidebarState() {
   );
 }
 
-function normalizeAssistantText(text) {
-  return String(text || "")
-    .replace(/\r\n/g, "\n")
-    // 移除 Markdown 標題符號（行首 #、##、### ...）
-    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
-    .trim();
-}
-
-function renderAssistantParagraphs(bubble, text) {
-  const normalized = normalizeAssistantText(text);
-
-  // 依空行分段，單段內保留換行
-  const paragraphs = normalized
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  if (paragraphs.length === 0) {
-    bubble.textContent = "AI 未回傳內容";
+function renderAssistantContent(bubble, text) {
+  if (window.LPRMarkdown?.renderToContainer) {
+    window.LPRMarkdown.renderToContainer(bubble, text, {
+      className: "markdown-content",
+      emptyText: "AI 未回傳內容",
+    });
     return;
   }
 
-  paragraphs.forEach((paragraph) => {
-    const p = document.createElement("p");
-    p.className = "ai-paragraph";
-    p.textContent = paragraph;
-    bubble.appendChild(p);
-  });
+  bubble.textContent = String(text || "").trim() || "AI 未回傳內容";
 }
 
 function appendBubble(text, role, isShort = false) {
@@ -70,7 +52,7 @@ function appendBubble(text, role, isShort = false) {
   }
 
   if (role === "assistant") {
-    renderAssistantParagraphs(bubble, text);
+    renderAssistantContent(bubble, text);
   } else {
     bubble.textContent = text;
   }
