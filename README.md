@@ -1,97 +1,411 @@
-# LPR(Lesson plan review) - AI 教案評論系統（New UI）
+# LPR (Lesson Plan Review) - AI 教案評論輔助系統
 
-本專案已切換為多頁式新介面，正式前端位於 `lesson-review-ui/`，並由後端同源提供。
+本文件提供「可供人與 AI 都能快速理解」的完整系統說明，涵蓋功能、架構、介面設計、資料流、設計理念與擴充方向。
 
-## 正式入口
+---
 
-- App 入口：`http://localhost:5000/app/upload.html`
-- 健康檢查：`http://localhost:5000/health`
+## 1. 系統介紹
 
-## 新介面流程
+LPR 是一個以「教案上傳 -> AI 分析與評論 -> 人工補充評分 -> 教案查閱」為核心流程的教學輔助系統。
 
-1. `upload.html`：上傳教案並建立 `currentLessonId`
-2. `index.html`（chat）：自由對話、摘要/分析/建議
-3. `lesson-review.html`：正式評論與局部修改
-4. `lesson-score.html`：五維度評分與儲存
-5. `lesson-view.html`：查看教案原文與上傳資訊
+系統採用「後端同源提供前端頁面」的部署方式：
 
-所有頁面以同一個 lessonId 串接，並透過 `lesson-review-ui/api.js` 統一 API 呼叫與 localStorage 相容讀寫。
+- 正式入口: http://localhost:5000/app/upload.html
+- 健康檢查: http://localhost:5000/health
 
-## 目前 API 對接狀態
+核心目標:
 
-- 已接上
-  - `POST /api/upload`
-  - `GET /api/upload/lesson/:id`
-  - `POST /api/chat`
-  - `POST /api/chat/analyze`
-  - `POST /api/chat/suggest`
-  - `POST /api/chat/score`
-  - `POST /api/chat/modify-comment`
-  - `POST /api/scores`
-  - `GET /api/scores/lesson/:lessonId`
+1. 降低教師撰寫與修正教案的時間成本。
+2. 讓 AI 回覆可控（模式分流、字數限制、格式策略）。
+3. 保留人工判斷空間（可手動評分、可局部改寫評論）。
+4. 支援後續升級（預留搜尋引擎抽象層、可接向量檢索）。
 
-## 快速啟動
+---
 
-### 1) 一鍵啟動（推薦）
+## 2. 製作理念（為什麼這樣設計）
 
-```powershell
-.\start.ps1
+### 2.1 教學場景優先
+
+本系統不是通用聊天機器人，而是以「教案工作流」為中心設計：
+
+1. 先上傳教案，確保 AI 回覆始終有內容依據。
+2. 再透過不同模式取得摘要、結構分析、改進建議或正式評論。
+3. 最後用人工評分與備註補齊實務判斷。
+
+### 2.2 前台簡潔、後台策略集中
+
+前端只負責互動和必要參數傳遞，提示詞與模式規則集中到後端，避免：
+
+1. 規則分散造成行為不一致。
+2. 前端硬編碼提示詞難以維護。
+3. 未來擴充新模式時需要大幅改前端。
+
+### 2.3 可控輸出而非單次自由生成
+
+透過 mode/action/maxChars 與後端策略，讓輸出具備「可預期邊界」：
+
+1. 首頁摘要有固定上限。
+2. 快速動作有更嚴格上限且主題分流。
+3. 正式評論保留較完整結構。
+
+---
+
+## 3. 現有功能總覽
+
+### 3.1 檔案上傳與內容解析
+
+1. 支援格式: PDF、DOC、DOCX、TXT。
+2. 透過 Multer 上傳，限制單檔 10MB。
+3. 後端自動解析檔案文字並儲存到 MongoDB。
+4. 上傳成功後前端保存 currentLessonId 與 currentLessonName。
+
+對應檔案:
+
+- backend/routes/upload.js
+- backend/services/fileParser.js
+- backend/models/Lesson.js
+- lesson-review-ui/upload.html
+- lesson-review-ui/upload.js
+
+### 3.2 AI 對話與模式分流
+
+1. 自動摘要模式 summary（首頁載入觸發，500 字上限）。
+2. 快速動作模式 quick-action（summary / analyze / suggest，300 字上限）。
+3. 自由對話模式 chat-free（不套固定評論模板）。
+4. 正式評論模式 review-formal（評論頁使用，偏完整結構）。
+5. 評論局部修改（modify-comment）可針對選取段落下修改指令。
+
+對應檔案:
+
+- backend/routes/chat.js
+- backend/services/rag-simple.js
+- backend/services/promptService.js
+- backend/prompts/base.md
+- backend/prompts/modes/\*.md
+- lesson-review-ui/chat.js
+- lesson-review-ui/lesson-review.js
+
+### 3.3 評分紀錄與回讀
+
+1. 五個維度星等評分（0-5）。
+2. 自動計算平均總分（四捨五入到小數第一位）。
+3. 可保存評論文字與多次評分記錄。
+4. 可按 lessonId 查詢歷史評分。
+
+對應檔案:
+
+- lesson-review-ui/lesson-score.html
+- lesson-review-ui/lesson-score.js
+- backend/routes/scores.js
+- backend/models/Score.js
+
+### 3.4 教案內容檢視
+
+1. 顯示教案檔名、上傳時間、完整內容。
+2. 以當前 lessonId 載入，確保與其他頁同一份資料。
+
+對應檔案:
+
+- lesson-review-ui/lesson-view.html
+- lesson-review-ui/lesson-view.js
+- backend/routes/upload.js (GET /api/upload/lesson/:id)
+
+### 3.5 啟停與營運工具
+
+1. start.ps1 自動檢查 Node、依賴、環境變數、埠占用。
+2. 啟動失敗時輸出後端最近 30 行 log。
+3. stop.ps1 可停止 5000/3000 埠相關程序與背景工作。
+
+對應檔案:
+
+- start.ps1
+- stop.ps1
+- README-啟動說明.md
+
+---
+
+## 4. 介面設計（UI 設計說明）
+
+### 4.1 視覺與互動一致性
+
+1. 全站採多頁一致布局: 左側導覽 + 右側主工作區。
+2. 主要頁面共用同一套樣式與狀態習慣（收合側欄、訊息氣泡、操作按鈕）。
+3. favicon 統一使用 logo：lesson-review-ui/assets/LPR.svg。
+
+### 4.2 資訊操作就近原則
+
+1. Upload 頁只做「檔案選擇與上傳結果」。
+2. Chat 頁聚焦快速對話和三個快捷操作。
+3. Review 頁聚焦正式評論結果與局部修訂。
+4. Score 頁聚焦量化評分與備註記錄。
+5. View 頁聚焦原始內容查閱與回流操作（回上傳/去評論）。
+
+### 4.3 安全渲染與可讀性
+
+1. AI 回覆支援 Markdown。
+2. 先以 marked 轉譯，再用 DOMPurify 清理，降低 XSS 風險。
+3. 若 Markdown 依賴不可用，降級為安全純文字段落顯示。
+
+對應檔案:
+
+- lesson-review-ui/helpers/markdown-renderer.js
+- lesson-review-ui/index.html
+- lesson-review-ui/lesson-review.html
+
+---
+
+## 5. 介面架構（IA 與頁面流程）
+
+### 5.1 五頁流程
+
+1. upload.html
+2. index.html
+3. lesson-review.html
+4. lesson-score.html
+5. lesson-view.html
+
+### 5.2 跨頁共享狀態
+
+前端使用 localStorage/sessionStorage 共享必要狀態：
+
+1. currentLessonId
+2. currentLessonName
+3. sidebarCollapsed
+4. chatSessionId（聊天頁 session）
+5. reviewSessionId（評論頁 session）
+
+狀態封裝在 lesson-review-ui/api.js 的 window.LPR 物件中，並維持舊 key 相容。
+
+---
+
+## 6. 系統架構（前後端）
+
+### 6.1 部署架構
+
+```text
+Browser (lesson-review-ui/*)
+      |
+      v
+Express backend (localhost:5000)
+  |- /app      -> 靜態前端頁面
+  |- /api/*    -> 業務 API
+  |- /health   -> 健康檢查
+      |
+      v
+MongoDB (lesson, score)
+      |
+      v
+Gemini API (內容生成)
 ```
 
-此模式只啟動後端，後端會直接提供 `/app` 靜態頁。
+### 6.2 後端模組分層
 
-### 2) 停止服務
+1. server.js: 伺服器啟動、路由掛載、錯誤處理。
+2. routes/\*.js: API 邊界層（驗證、組裝請求、錯誤映射）。
+3. services/\*.js: 業務邏輯（RAG、Prompt、檔案解析、Gemini 客戶端）。
+4. models/\*.js: MongoDB schema。
+5. data/\*.json: 評分標準與教案評鑑參考資料。
 
-```powershell
-.\stop.ps1
-```
+---
 
-### 3) Legacy 開發模式（可選）
+## 7. 核心資料流
 
-```powershell
-.\start.ps1 -LegacyFrontend
-```
+### 7.1 上傳與建立教案
 
-會額外啟動 Port 3000 的靜態伺服器，供比對或除錯舊流程。
+1. 前端送出 FormData 到 POST /api/upload。
+2. 後端解析檔案文字後寫入 Lesson 集合。
+3. 回傳 lessonId，前端寫入 currentLessonId/currentLessonName。
 
-## 資料庫設定
+### 7.2 AI 對話生成
 
-後端已改為使用 MongoDB 持久化儲存：
+1. 前端送 message + selectedSources + mode/action/maxChars。
+2. chat route 讀取對應教案內容，傳給 rag-simple。
+3. rag-simple 組 prompt -> 呼叫 Gemini -> 長度治理 -> 回傳內容。
+4. 前端將結果以 Markdown 安全渲染。
 
-- `MONGODB_URI`：預設 `mongodb://127.0.0.1:27017/`
-- `MONGODB_DB_NAME`：預設 `lpr`
-- `SEARCH_ENGINE`：預設 `simple`（已預留向量搜尋抽象層）
+### 7.3 評分儲存
 
-若未設定環境變數，系統會使用上述預設值。
+1. 前端送五維 scores + total + comment。
+2. 後端驗證範圍後寫入 Score 集合。
+3. 需要回讀時，以 lessonId 取最新到最舊紀錄。
 
-## 對話模式分流
+---
 
-對話 API 已採模式分流：
+## 8. API 總覽
 
-- `summary`：首頁自動摘要，嚴格限制在 500 字內
-- `quick-action`：快速按鈕（summary/analyze/suggest），嚴格限制在 300 字內
-- `chat-free`：自由對話，不套固定評論模板
-- `review-formal`：教案評論頁的正式評論模式
+### 8.1 Upload
 
-## 目錄重點
+1. POST /api/upload
+2. POST /api/upload/multiple
+3. GET /api/upload/lessons
+4. GET /api/upload/lesson/:id
+5. DELETE /api/upload/lesson/:id
 
-- `backend/`：API 與 AI 服務
-- `lesson-review-ui/`：正式前端（New UI）
-- `start.ps1` / `stop.ps1`：啟停腳本
+### 8.2 Chat
 
-## 替換策略（重要）
+1. POST /api/chat
+2. POST /api/chat/analyze
+3. POST /api/chat/suggest
+4. POST /api/chat/score
+5. POST /api/chat/compare
+6. POST /api/chat/modify-comment
+7. GET /api/chat/criteria
+8. DELETE /api/chat/session/:sessionId
 
-舊 UI（根目錄 `index.html`、`app.js`、`styles.css`）必須在「五頁流程驗證完成」後再刪除：
+### 8.3 Scores
 
-1. 先跑啟動驗證與 API 驗證
-2. 再跑 upload -> chat -> review -> score -> view 人工流程
-3. 全部通過後再移除舊 UI 檔案
+1. POST /api/scores
+2. GET /api/scores
+3. GET /api/scores/lesson/:lessonId
+4. GET /api/scores/:scoreId
+5. PUT /api/scores/:scoreId
+6. DELETE /api/scores/:scoreId
 
-## 驗證清單
+---
 
-- 啟動後可打開 `http://localhost:5000/app/upload.html`
-- 上傳成功後會保存 `currentLessonId` 與 `currentLessonName`
-- chat/review/score/view 都使用同一份 lessonId
-- 評論可重新生成且局部修改可成功
-- 評分可儲存並讀回
-- 查看教案頁可讀取真實內容（非示例）
+## 9. 對話模式與長度策略
+
+模式規則由後端 promptService 統一管理，不放在前端硬編碼。
+
+1. summary
+
+- 常見入口: 首頁初始摘要
+- 字數上限: 500
+
+2. quick-action
+
+- 子動作: summary / analyze / suggest / score
+- 字數上限: 300
+
+3. chat-free
+
+- 自由問答
+- 字數上限: 不固定
+
+4. review-formal
+
+- 正式評論
+- 字數上限: 約 1000
+
+超長處理策略:
+
+1. 先嘗試二次壓縮提示。
+2. 若仍超限，硬切字數以滿足上限需求。
+
+---
+
+## 10. 資料模型
+
+### 10.1 Lesson
+
+主要欄位:
+
+1. lessonId (Number, unique)
+2. name
+3. filename
+4. type
+5. size
+6. uploadDate
+7. content
+
+### 10.2 Score
+
+主要欄位:
+
+1. scoreId (Number, unique)
+2. lessonId
+3. scores.structure
+4. scores.objectives
+5. scores.activities
+6. scores.methods
+7. scores.assessment
+8. total
+9. comment
+10. createdAt / updatedAt
+
+---
+
+## 11. 環境變數與啟動
+
+以 backend/.env 為實際執行檔，backend/.env.example 為模板。
+
+必要設定:
+
+1. PORT=5000
+2. MONGODB_URI=mongodb://127.0.0.1:27017/
+3. MONGODB_DB_NAME=lpr
+4. SEARCH_ENGINE=simple
+5. GEMINI_API_KEY=你的有效金鑰
+6. EMBEDDING_MODEL=models/embedding-001
+7. LLM_MODEL=gemini-2.5-flash-lite
+
+啟動方式:
+
+1. .\start.ps1
+2. .\start.ps1 -NoBrowser
+3. .\start.ps1 -LegacyFrontend
+
+停止方式:
+
+1. .\stop.ps1
+
+---
+
+## 12. 已知限制與維運注意
+
+1. 若 Gemini 配額耗盡，chat API 會回傳 HTTP 429。
+2. 本專案目前搜尋引擎預設為 simple（關鍵字比對），尚未接入實際向量資料庫。
+3. 對話 session 暫存於記憶體，重啟服務後會清空。
+
+---
+
+## 13. 給其他 AI 的快速導航
+
+### 13.1 你要改「模式規則 / 提示詞」
+
+1. backend/services/promptService.js
+2. backend/prompts/base.md
+3. backend/prompts/modes/\*.md
+4. backend/services/rag-simple.js
+
+### 13.2 你要改「頁面互動流程」
+
+1. lesson-review-ui/upload.js
+2. lesson-review-ui/chat.js
+3. lesson-review-ui/lesson-review.js
+4. lesson-review-ui/lesson-score.js
+5. lesson-review-ui/lesson-view.js
+
+### 13.3 你要改「資料結構 / 儲存」
+
+1. backend/models/Lesson.js
+2. backend/models/Score.js
+3. backend/routes/upload.js
+4. backend/routes/scores.js
+
+### 13.4 你要改「啟動與部署」
+
+1. start.ps1
+2. stop.ps1
+3. backend/server.js
+4. README-啟動說明.md
+
+---
+
+## 14. 驗證清單（回歸測試）
+
+1. 可開啟 /app/upload.html 並成功上傳教案。
+2. 上傳後可在 chat 頁看到自動摘要。
+3. 快捷按鈕可分別觸發 summary/analyze/suggest。
+4. 正式評論頁可生成評論，且可選取片段做 AI 修改。
+5. 評分頁可儲存與回讀五維評分。
+6. 查看頁可正確顯示同一 lesson 的完整內容。
+7. /health 回傳 ok。
+
+---
+
+## 15. 授權與使用提醒
+
+1. 本 README 設計為開發與維護文件，優先清楚性與可追溯性。
+2. 請勿將真實 GEMINI_API_KEY 提交到版本控制。
+3. 若已外洩金鑰，請立即在供應商平台旋轉金鑰並更新 backend/.env。
