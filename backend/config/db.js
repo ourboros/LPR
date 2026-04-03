@@ -8,12 +8,13 @@ function isSrvUri(uri) {
 }
 
 function getMongoUri() {
-  return (
-    process.env.MONGODB_URI ||
-    process.env.MONGODB_URI_DIRECT ||
-    process.env.atlas_URL ||
-    "mongodb://127.0.0.1:27017/"
-  );
+  const uri = process.env.MONGODB_URI;
+
+  if (typeof uri !== "string" || uri.trim() === "") {
+    throw new Error("Missing required env: MONGODB_URI");
+  }
+
+  return uri.trim();
 }
 
 async function connectDB() {

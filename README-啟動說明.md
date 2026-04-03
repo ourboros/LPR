@@ -28,9 +28,9 @@
 
 後端會讀取 `backend/.env` 的以下設定：
 
-- `MONGODB_URI`（預設：`mongodb://127.0.0.1:27017/`）
+- `MONGODB_URI`（必要，請填 Atlas 連線字串）
 - `MONGODB_URI_DIRECT`（可選，Atlas `mongodb+srv` 在某些網路環境無法解析時使用）
-- `MONGODB_DB_NAME`（預設：`lpr`）
+- `MONGODB_DB_NAME`（可選，未設定時預設 `lpr`）
 
 可先用 `backend/.env.example` 建立你的 `.env`。
 

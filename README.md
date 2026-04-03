@@ -334,12 +334,13 @@ Gemini API (內容生成)
 必要設定:
 
 1. PORT=5000
-2. MONGODB_URI=mongodb://127.0.0.1:27017/
+2. MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority
 3. MONGODB_DB_NAME=lpr
-4. SEARCH_ENGINE=simple
-5. GEMINI_API_KEY=你的有效金鑰
-6. EMBEDDING_MODEL=models/embedding-001
-7. LLM_MODEL=gemini-2.5-flash-lite
+4. MONGODB_URI_DIRECT=（可選，SRV DNS 無法解析時使用）
+5. SEARCH_ENGINE=simple
+6. GEMINI_API_KEY=你的有效金鑰
+7. EMBEDDING_MODEL=models/embedding-001
+8. LLM_MODEL=gemini-2.5-flash-lite
 
 啟動方式:
 

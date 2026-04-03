@@ -148,15 +148,6 @@ if (-not (Test-Path $backendNodeModules)) {
 $envFilePath = ".\backend\.env"
 $mongoUri = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI"
 $mongoUriDirect = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI_DIRECT"
-$atlasUri = Get-EnvFileValue -FilePath $envFilePath -Key "atlas_URL"
-
-if ([string]::IsNullOrWhiteSpace($mongoUri)) {
-    $mongoUri = $mongoUriDirect
-}
-
-if ([string]::IsNullOrWhiteSpace($mongoUri)) {
-    $mongoUri = $atlasUri
-}
 
 $mongoDbName = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_DB_NAME"
 $geminiApiKey = Get-EnvFileValue -FilePath $envFilePath -Key "GEMINI_API_KEY"
@@ -166,10 +157,6 @@ if (-not (Test-Path $envFilePath)) {
     Write-Host "Please create backend/.env from backend/.env.example first." -ForegroundColor Yellow
     pause
     exit 1
-}
-
-if ([string]::IsNullOrWhiteSpace($mongoUri)) {
-    $mongoUri = "mongodb://127.0.0.1:27017/"
 }
 
 if ([string]::IsNullOrWhiteSpace($mongoDbName)) {
