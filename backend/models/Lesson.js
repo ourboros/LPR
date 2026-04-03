@@ -13,6 +13,25 @@ const lessonSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    normalizedName: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    contentHash: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    sourceSignature: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    canonicalLessonId: {
+      type: Number,
+      index: true,
+    },
     filename: {
       type: String,
       required: true,
@@ -43,5 +62,8 @@ const lessonSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+
+lessonSchema.index({ canonicalLessonId: 1, uploadDate: -1 });
+lessonSchema.index({ normalizedName: 1, size: 1, type: 1 });
 
 module.exports = mongoose.model("Lesson", lessonSchema);

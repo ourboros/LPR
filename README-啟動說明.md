@@ -1,5 +1,9 @@
 # LPR 啟動說明（New UI 正式模式）
 
+## 0. 執行環境需求
+
+- Node.js 20.19.0 以上版本
+
 ## 1. 正式啟動方式（推薦）
 
 ```powershell
@@ -25,9 +29,12 @@
 後端會讀取 `backend/.env` 的以下設定：
 
 - `MONGODB_URI`（預設：`mongodb://127.0.0.1:27017/`）
+- `MONGODB_URI_DIRECT`（可選，Atlas `mongodb+srv` 在某些網路環境無法解析時使用）
 - `MONGODB_DB_NAME`（預設：`lpr`）
 
 可先用 `backend/.env.example` 建立你的 `.env`。
+
+如果你看到 `querySrv ECONNREFUSED`，這通常不是帳號密碼錯誤，也不一定是 Node.js 版本問題，而是目前 DNS / 網路環境無法解析 Atlas 的 SRV 記錄。這時請改用 Atlas console 提供的 direct connection string，填入 `MONGODB_URI_DIRECT`。
 
 若 `backend/.env` 缺少必要設定（例如 `GEMINI_API_KEY`），`start.ps1` 會在啟動前直接提示並停止。
 

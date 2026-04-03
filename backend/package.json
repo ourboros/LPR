@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "教案輔助評論系統 - 後端服務",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"

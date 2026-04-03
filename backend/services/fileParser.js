@@ -42,6 +42,37 @@ class FileParser {
   }
 
   /**
+   * 解析記憶體中的檔案內容
+   * @param {Buffer} fileBuffer - 檔案 Buffer
+   * @param {string} filename - 原始檔名
+   * @param {string} mimeType - MIME 類型
+   * @returns {Promise<string>} 提取的文本內容
+   */
+  async parseFileBuffer(fileBuffer, filename, mimeType) {
+    try {
+      const ext = path.extname(filename || "").toLowerCase();
+
+      switch (ext) {
+        case ".pdf":
+          return await this.parsePDFBuffer(fileBuffer);
+
+        case ".docx":
+          return await this.parseDOCXBuffer(fileBuffer);
+
+        case ".doc":
+          return await this.parseDOCXBuffer(fileBuffer);
+
+        case ".txt":
+        default:
+          return await this.parseTXTBuffer(fileBuffer);
+      }
+    } catch (error) {
+      console.error("記憶體檔案解析錯誤:", error);
+      throw new Error(`解析檔案失敗: ${error.message}`);
+    }
+  }
+
+  /**
    * 解析 PDF 檔案
    * @param {string} filePath - PDF 檔案路徑
    * @returns {Promise<string>} 提取的文本
@@ -94,6 +125,32 @@ class FileParser {
     try {
       const content = fs.readFileSync(filePath, "utf-8");
       return this.cleanText(content);
+    } catch (error) {
+      throw new Error(`TXT 解析失敗: ${error.message}`);
+    }
+  }
+
+  async parsePDFBuffer(fileBuffer) {
+    try {
+      const data = await pdfParse(fileBuffer);
+      return this.cleanText(data.text);
+    } catch (error) {
+      throw new Error(`PDF 解析失敗: ${error.message}`);
+    }
+  }
+
+  async parseDOCXBuffer(fileBuffer) {
+    try {
+      const result = await mammoth.extractRawText({ buffer: fileBuffer });
+      return this.cleanText(result.value);
+    } catch (error) {
+      throw new Error(`DOCX 解析失敗: ${error.message}`);
+    }
+  }
+
+  async parseTXTBuffer(fileBuffer) {
+    try {
+      return this.cleanText(Buffer.from(fileBuffer).toString("utf-8"));
     } catch (error) {
       throw new Error(`TXT 解析失敗: ${error.message}`);
     }

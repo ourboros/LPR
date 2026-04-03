@@ -253,7 +253,9 @@ async function loadExistingScores() {
     (window.LPR && window.LPR.getCurrentLessonId()) ||
     localStorage.getItem(CURRENT_LESSON_KEY) ||
     localStorage.getItem(LEGACY_CURRENT_LESSON_KEY);
-  if (!lessonId) return;
+  if (!lessonId) {
+    return false;
+  }
 
   try {
     const scoreRecords = await window.LPR.request(`/scores/lesson/${lessonId}`);
@@ -285,9 +287,62 @@ async function loadExistingScores() {
 
       // 更新總分顯示
       updateTotalScore();
+      return true;
     }
+
+    return false;
   } catch (error) {
     console.error("載入評分記錄失敗:", error);
+    return false;
+  }
+}
+
+async function restoreLatestScoresToForm() {
+  const lessonId =
+    (window.LPR && window.LPR.getCurrentLessonId()) ||
+    localStorage.getItem(CURRENT_LESSON_KEY) ||
+    localStorage.getItem(LEGACY_CURRENT_LESSON_KEY);
+
+  if (!lessonId) {
+    return false;
+  }
+
+  try {
+    const data = await window.LPR.request(`/scores/history/${lessonId}`);
+    const records = Array.isArray(data.scores) ? data.scores : [];
+
+    if (records.length === 0) {
+      return false;
+    }
+
+    const latestRecord = records[0];
+
+    const restoredScores = latestRecord.scores || {};
+    DIMENSIONS.forEach((dimension) => {
+      const ratingItem = document.querySelector(
+        `[data-dimension="${dimension}"]`,
+      );
+      if (ratingItem) {
+        const starRating = ratingItem.querySelector(".star-rating");
+        if (starRating) {
+          const value = Number(restoredScores[dimension]);
+          if (Number.isFinite(value) && value > 0) {
+            scores[dimension] = value;
+            updateStars(starRating, value);
+          }
+        }
+      }
+    });
+
+    if (scoreComment && latestRecord.comment) {
+      scoreComment.value = latestRecord.comment;
+    }
+
+    updateTotalScore();
+    return true;
+  } catch (error) {
+    console.error("載入歷史評分失敗:", error);
+    return false;
   }
 }
 
@@ -318,9 +373,12 @@ function showToast(message, type = "success") {
 // 初始化
 // ============================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initStarRatings();
-  loadExistingScores();
+  const hasCurrentScore = await loadExistingScores();
+  if (!hasCurrentScore) {
+    await restoreLatestScoresToForm();
+  }
 });
 
 resetBtn.addEventListener("click", resetAllScores);

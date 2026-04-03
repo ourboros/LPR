@@ -189,6 +189,45 @@ function inferQuickAction(button) {
   return "summary";
 }
 
+async function loadAndInjectHistoryChat() {
+  const lessonId = window.LPR.getCurrentLessonId();
+  if (!lessonId) {
+    return false;
+  }
+
+  try {
+    const data = await window.LPR.request(`/reviews/history/${lessonId}`);
+    const reviews = Array.isArray(data.reviews) ? data.reviews : [];
+    const chatReviews = reviews.filter((item) => item.mode !== "review-formal");
+
+    if (chatReviews.length === 0) {
+      return false;
+    }
+
+    const seedRecords = chatReviews.slice(0, 3).reverse();
+    seedRecords.forEach((record) => {
+      const prompt = String(record.userPrompt || "").trim();
+      const answer = String(record.aiContent || "").trim();
+
+      if (prompt) {
+        appendBubble(prompt, "user", prompt.length <= 20);
+        chatHistory.push({ role: "user", content: prompt });
+      }
+
+      if (answer) {
+        appendBubble(answer, "assistant");
+        chatHistory.push({ role: "assistant", content: answer });
+      }
+    });
+
+    appendSystemMessage("已載入先前對話紀錄，可直接延續討論。");
+    return chatHistory.length > 0;
+  } catch (error) {
+    console.error("載入歷史對話失敗:", error);
+    return false;
+  }
+}
+
 applySidebarState();
 
 if (menuBtn && pageShell) {
@@ -240,10 +279,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     appendSystemMessage(`目前分析教案：${currentLessonName}`);
   }
 
-  await requestAssistantReply("請生成教案摘要", {
-    showUser: false,
-    mode: "summary",
-    action: "summary",
-    maxChars: 500,
-  });
+  const hasHistory = await loadAndInjectHistoryChat();
+
+  if (!hasHistory) {
+    await requestAssistantReply("請生成教案摘要", {
+      showUser: false,
+      mode: "summary",
+      action: "summary",
+      maxChars: 500,
+    });
+  }
 });

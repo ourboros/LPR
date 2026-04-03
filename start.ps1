@@ -26,12 +26,12 @@ function Get-EnvFileValue {
         return $null
     }
 
-    $line = Get-Content $FilePath | Where-Object { $_ -match "^$Key=" } | Select-Object -First 1
+    $line = Get-Content $FilePath | Where-Object { $_ -match "^\s*$Key\s*=" } | Select-Object -First 1
     if (-not $line) {
         return $null
     }
 
-    return ($line -split "=", 2)[1]
+    return (($line -split "=", 2)[1]).Trim()
 }
 
 function Show-RecentBackendLogs {
@@ -44,7 +44,8 @@ function Show-RecentBackendLogs {
         return
     }
 
-    $jobOutput = @(Receive-Job $Job -Keep -ErrorAction SilentlyContinue)
+    $jobErrors = @()
+    $jobOutput = @(Receive-Job $Job -Keep -ErrorAction SilentlyContinue -ErrorVariable jobErrors)
 
     if (-not $jobOutput -or $jobOutput.Count -eq 0) {
         Write-Host "No backend logs available." -ForegroundColor DarkYellow
@@ -55,6 +56,18 @@ function Show-RecentBackendLogs {
     $jobOutput | Select-Object -Last $LineCount | ForEach-Object {
         Write-Host $_
     }
+
+    if ($jobErrors -and $jobErrors.Count -gt 0) {
+        Write-Host "Showing last $LineCount backend error lines:" -ForegroundColor Yellow
+        $jobErrors | Select-Object -Last $LineCount | ForEach-Object {
+            Write-Host $_
+        }
+    }
+
+    Write-Host "Backend job state: $($Job.State)" -ForegroundColor DarkYellow
+    if ($Job.ChildJobs.Count -gt 0 -and $Job.ChildJobs[0].JobStateInfo.Reason) {
+        Write-Host "Backend job reason: $($Job.ChildJobs[0].JobStateInfo.Reason.Message)" -ForegroundColor DarkYellow
+    }
 }
 
 function Test-EnvValuePresent {
@@ -63,6 +76,26 @@ function Test-EnvValuePresent {
     )
 
     return -not [string]::IsNullOrWhiteSpace($Value) -and $Value -ne "your_api_key_here"
+}
+
+function Test-NodeVersionAtLeast {
+    param(
+        [string]$VersionText,
+        [version]$MinimumVersion
+    )
+
+    $normalizedVersion = $VersionText.Trim()
+    if ($normalizedVersion.StartsWith("v")) {
+        $normalizedVersion = $normalizedVersion.Substring(1)
+    }
+
+    try {
+        $currentVersion = [version]$normalizedVersion
+    } catch {
+        return $false
+    }
+
+    return $currentVersion -ge $MinimumVersion
 }
 
 Write-Host ""
@@ -78,6 +111,15 @@ Write-Host "[1/5] Checking Node.js..." -ForegroundColor Yellow
 
 try {
     $nodeVersion = node --version
+    $minimumNodeVersion = [version]"20.19.0"
+
+    if (-not (Test-NodeVersionAtLeast -VersionText $nodeVersion -MinimumVersion $minimumNodeVersion)) {
+        Write-Host "ERROR Node.js version $nodeVersion is too old." -ForegroundColor Red
+        Write-Host "Please install Node.js $minimumNodeVersion or newer from: https://nodejs.org/" -ForegroundColor Yellow
+        pause
+        exit 1
+    }
+
     Write-Host "OK Node.js version: $nodeVersion" -ForegroundColor Green
 } catch {
     Write-Host "ERROR Node.js not installed" -ForegroundColor Red
@@ -105,6 +147,17 @@ if (-not (Test-Path $backendNodeModules)) {
 
 $envFilePath = ".\backend\.env"
 $mongoUri = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI"
+$mongoUriDirect = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_URI_DIRECT"
+$atlasUri = Get-EnvFileValue -FilePath $envFilePath -Key "atlas_URL"
+
+if ([string]::IsNullOrWhiteSpace($mongoUri)) {
+    $mongoUri = $mongoUriDirect
+}
+
+if ([string]::IsNullOrWhiteSpace($mongoUri)) {
+    $mongoUri = $atlasUri
+}
+
 $mongoDbName = Get-EnvFileValue -FilePath $envFilePath -Key "MONGODB_DB_NAME"
 $geminiApiKey = Get-EnvFileValue -FilePath $envFilePath -Key "GEMINI_API_KEY"
 
@@ -121,6 +174,11 @@ if ([string]::IsNullOrWhiteSpace($mongoUri)) {
 
 if ([string]::IsNullOrWhiteSpace($mongoDbName)) {
     $mongoDbName = "lpr"
+}
+
+if ($mongoUri -and $mongoUri.StartsWith("mongodb+srv://")) {
+    Write-Host "INFO MongoDB uses SRV. If querySrv fails, the current network or DNS may not support SRV lookup." -ForegroundColor DarkYellow
+    Write-Host "INFO Consider putting the Atlas direct connection string into MONGODB_URI_DIRECT." -ForegroundColor DarkYellow
 }
 
 $missingEnvKeys = @()
@@ -174,17 +232,33 @@ Write-Host "OK Ports available" -ForegroundColor Green
 # ============================================
 Write-Host "[4/5] Starting backend server (Port 5000)..." -ForegroundColor Yellow
 
-$backendJob = Start-Job -Name "LPR-Backend" -ScriptBlock {
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    $OutputEncoding = [System.Text.Encoding]::UTF8
-    Set-Location $using:PWD
-    Set-Location backend
-    node server.js
+$staleJobs = @(Get-Job -Name "LPR-Backend" -ErrorAction SilentlyContinue)
+if ($staleJobs.Count -gt 0) {
+    Write-Host "INFO Cleaning stale backend jobs..." -ForegroundColor DarkYellow
+    $staleJobs | ForEach-Object {
+        Stop-Job $_ -ErrorAction SilentlyContinue
+        Remove-Job $_ -ErrorAction SilentlyContinue
+    }
+}
+
+try {
+    $backendJob = Start-Job -Name "LPR-Backend" -ScriptBlock {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $OutputEncoding = [System.Text.Encoding]::UTF8
+        Set-Location $using:PWD.Path
+        Set-Location backend
+        node server.js
+    }
+} catch {
+    Write-Host "ERROR Unable to create backend job: $($_.Exception.Message)" -ForegroundColor Red
+    pause
+    exit 1
 }
 
 $backendReady = $false
+$maxAttempts = 30
 
-for ($attempt = 1; $attempt -le 10; $attempt++) {
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     Start-Sleep -Seconds 1
 
     try {
@@ -192,6 +266,10 @@ for ($attempt = 1; $attempt -le 10; $attempt++) {
         $backendReady = $true
         break
     } catch {
+        if ($attempt -eq 5 -or $attempt -eq 15 -or $attempt -eq 25) {
+            Write-Host "INFO Waiting for backend startup... ($attempt/$maxAttempts)" -ForegroundColor DarkYellow
+        }
+
         if ($backendJob.State -eq "Failed" -or $backendJob.State -eq "Completed" -or $backendJob.State -eq "Stopped") {
             break
         }
@@ -202,6 +280,10 @@ if ($backendReady) {
     Write-Host "OK Backend server running (Job ID: $($backendJob.Id))" -ForegroundColor Green
 } else {
     Write-Host "ERROR Backend failed to start" -ForegroundColor Red
+    if ($backendJob.State -eq "Running") {
+        Write-Host "INFO Backend job is still running but health check did not pass in time." -ForegroundColor Yellow
+        Write-Host "INFO This is often caused by MongoDB startup delay or local networking issues." -ForegroundColor Yellow
+    }
     Write-Host "Checking logs:" -ForegroundColor Yellow
     Show-RecentBackendLogs -Job $backendJob -LineCount 30
     Stop-Job $backendJob -ErrorAction SilentlyContinue

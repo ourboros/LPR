@@ -104,6 +104,46 @@ async function requestReview(message, options = {}) {
   }
 }
 
+async function loadAndInjectFormalReviewHistory() {
+  const lessonId = window.LPR?.getCurrentLessonId();
+  if (!lessonId) {
+    return false;
+  }
+
+  try {
+    const data = await window.LPR.request(`/reviews/history/${lessonId}`);
+    const records = (data.reviews || []).filter(
+      (item) => item.mode === "review-formal",
+    );
+
+    if (records.length === 0) {
+      return false;
+    }
+
+    const seedRecords = records.slice(0, 2).reverse();
+    seedRecords.forEach((item) => {
+      const prompt = String(item.userPrompt || "").trim();
+      const content = String(item.aiContent || "").trim();
+
+      if (prompt) {
+        createUserBubble(prompt);
+        reviewHistory.push({ role: "user", content: prompt });
+      }
+
+      if (content) {
+        createReviewBubble(content);
+        reviewHistory.push({ role: "assistant", content });
+      }
+    });
+
+    createReviewBubble("已載入先前正式評論，可直接繼續調整。");
+    return reviewHistory.length > 0;
+  } catch (error) {
+    console.error("載入歷史正式評論失敗:", error);
+    return false;
+  }
+}
+
 function hideCommentEditor() {
   if (!commentEditor) {
     return;
@@ -226,7 +266,10 @@ menuBtn.addEventListener("click", () => {
 
 // 頁面載入時自動生成首次評論
 window.addEventListener("DOMContentLoaded", async () => {
-  await requestReview(INITIAL_REVIEW_PROMPT, { clearExisting: true });
+  const hasHistory = await loadAndInjectFormalReviewHistory();
+  if (!hasHistory) {
+    await requestReview(INITIAL_REVIEW_PROMPT, { clearExisting: true });
+  }
 });
 
 // 重新生成評論按鈕
@@ -275,11 +318,13 @@ commentEditorCancel.addEventListener("click", () => {
  * @returns {Promise<string>} 修改後的評論
  */
 async function modifyCommentWithAI(originalComment, instruction) {
+  const lessonId = window.LPR?.getCurrentLessonId();
   const data = await window.LPR.request("/chat/modify-comment", {
     method: "POST",
     body: {
       originalComment,
       instruction,
+      lessonId: lessonId ? parseFloat(lessonId) : undefined,
     },
   });
 

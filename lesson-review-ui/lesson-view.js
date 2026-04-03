@@ -3,6 +3,9 @@ const pageShell = document.querySelector(".page-shell");
 const lessonFileName = document.getElementById("lessonFileName");
 const lessonUploadDate = document.getElementById("lessonUploadDate");
 const lessonText = document.getElementById("lessonText");
+const deleteHistoryBtn = document.getElementById("deleteHistoryBtn");
+const deletePreviewBox = document.getElementById("deletePreviewBox");
+const deletePreviewSummary = document.getElementById("deletePreviewSummary");
 
 function applySidebarState() {
   if (!pageShell) {
@@ -48,6 +51,46 @@ async function loadLesson() {
   }
 }
 
+async function deleteLessonWithHistory() {
+  const lessonId = window.LPR.getCurrentLessonId();
+  if (!lessonId) {
+    return;
+  }
+
+  try {
+    const preview = await window.LPR.request(
+      `/upload/lesson/${lessonId}/delete-preview?scope=history`,
+    );
+
+    if (deletePreviewBox && deletePreviewSummary) {
+      deletePreviewSummary.textContent = `將刪除教案 ${preview.lessonCount} 筆、評論 ${preview.reviewCount} 筆、評分 ${preview.scoreCount} 筆、檔案 ${preview.fileCount} 筆。`;
+      deletePreviewBox.hidden = false;
+    }
+
+    const confirmed = window.confirm(
+      "確認刪除這份教案及同群組的評論與評分紀錄嗎？此動作無法復原。",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await window.LPR.request(
+      `/upload/lesson/${lessonId}?cascade=true&scope=history`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    window.LPR.clearCurrentLesson();
+    sessionStorage.removeItem("chatSessionId");
+    sessionStorage.removeItem("reviewSessionId");
+    window.location.href = "./upload.html";
+  } catch (error) {
+    alert(`刪除失敗：${error.message}`);
+  }
+}
+
 applySidebarState();
 
 if (menuBtn && pageShell) {
@@ -55,6 +98,10 @@ if (menuBtn && pageShell) {
     pageShell.classList.toggle("sidebar-collapsed");
     persistSidebarState();
   });
+}
+
+if (deleteHistoryBtn) {
+  deleteHistoryBtn.addEventListener("click", deleteLessonWithHistory);
 }
 
 document.addEventListener("DOMContentLoaded", loadLesson);

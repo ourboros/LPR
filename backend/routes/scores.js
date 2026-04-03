@@ -5,9 +5,41 @@
 const express = require("express");
 const router = express.Router();
 const Score = require("../models/Score");
+const Lesson = require("../models/Lesson");
 
 function generateNumericId() {
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
+function normalizeLessonId(rawLessonId) {
+  const lessonId = Number.parseFloat(rawLessonId);
+  if (!Number.isFinite(lessonId)) {
+    return null;
+  }
+
+  return lessonId;
+}
+
+async function resolveHistoryLessonIds(lessonId) {
+  const lesson = await Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+  if (!lesson) {
+    return [];
+  }
+
+  const canonicalLessonId = lesson.canonicalLessonId || lesson.lessonId;
+  const relatedLessons = await Lesson.find(
+    {
+      $or: [{ canonicalLessonId }, { lessonId: canonicalLessonId }],
+    },
+    { _id: 0, lessonId: 1 },
+  ).lean();
+
+  const lessonIds = relatedLessons.map((item) => item.lessonId);
+  if (!lessonIds.includes(lesson.lessonId)) {
+    lessonIds.push(lesson.lessonId);
+  }
+
+  return lessonIds;
 }
 
 /**
@@ -71,7 +103,11 @@ router.post("/", async (req, res) => {
  */
 router.get("/lesson/:lessonId", async (req, res) => {
   try {
-    const lessonId = parseFloat(req.params.lessonId);
+    const lessonId = normalizeLessonId(req.params.lessonId);
+
+    if (!lessonId) {
+      return res.status(400).json({ error: "無效的 lessonId" });
+    }
 
     const scores = await Score.find({ lessonId }, { _id: 0, __v: 0 })
       .sort({ createdAt: -1 })
@@ -82,6 +118,40 @@ router.get("/lesson/:lessonId", async (req, res) => {
     console.error("取得評分錯誤:", error);
     res.status(500).json({
       error: "取得評分時發生錯誤",
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/scores/history/:lessonId
+ * 取得同群組教案的所有評分
+ */
+router.get("/history/:lessonId", async (req, res) => {
+  try {
+    const lessonId = normalizeLessonId(req.params.lessonId);
+
+    if (!lessonId) {
+      return res.status(400).json({ error: "無效的 lessonId" });
+    }
+
+    const lessonIds = await resolveHistoryLessonIds(lessonId);
+    if (lessonIds.length === 0) {
+      return res.json({ lessonIds: [], scores: [] });
+    }
+
+    const scores = await Score.find(
+      { lessonId: { $in: lessonIds } },
+      { _id: 0, __v: 0 },
+    )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ lessonIds, scores });
+  } catch (error) {
+    console.error("取得歷史評分錯誤:", error);
+    res.status(500).json({
+      error: "取得歷史評分時發生錯誤",
       message: error.message,
     });
   }

@@ -29,6 +29,8 @@ yarn-error.log*
 .vscode/settings.json
 .vscode/launch.json
 .idea/
+.vercel/
+client_secret_*.json
 
 # 作業系統檔案
 .DS_Store

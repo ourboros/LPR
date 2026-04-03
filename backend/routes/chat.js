@@ -6,6 +6,7 @@ const express = require("express");
 const router = express.Router();
 const ragService = require("../services/rag-simple");
 const Lesson = require("../models/Lesson");
+const ReviewRecord = require("../models/ReviewRecord");
 
 // 記憶體儲存（簡單實作）
 const sessions = new Map();
@@ -37,13 +38,18 @@ router.post("/", async (req, res) => {
     const sid = sessionId || generateSessionId();
     let history = sessions.get(sid) || [];
 
+    const normalizedMode = normalizeMode(mode);
+    const normalizedAction = normalizeAction(action);
+    const safeHistory = sanitizeChatHistory(chatHistory || history);
+    const safeSelectedSources = normalizeSelectedSources(selectedSources);
+
     // 取得選擇的教案內容
     let lessonContent = null;
-    if (selectedSources && selectedSources.length > 0) {
+    if (safeSelectedSources.length > 0) {
       const lessonSections = [];
 
-      for (const sourceId of selectedSources) {
-        const lesson = await findLessonById(sourceId);
+      for (const sourceId of safeSelectedSources) {
+        const lesson = await safeFindLessonById(sourceId);
         if (lesson) {
           lessonSections.push(`【${lesson.name}】\n${lesson.content}`);
         }
@@ -52,14 +58,20 @@ router.post("/", async (req, res) => {
       lessonContent = lessonSections.join("\n\n");
     }
 
+    if (normalizedMode === "summary" && !lessonContent) {
+      return res.status(400).json({
+        error: "找不到可用的教案內容，請重新選擇教案後再試一次",
+      });
+    }
+
     // 使用 RAG 服務生成回應
     const response = await ragService.generateComment(
       message,
       lessonContent,
-      chatHistory || history,
+      safeHistory,
       {
-        mode: normalizeMode(mode),
-        action: normalizeAction(action),
+        mode: normalizedMode,
+        action: normalizedAction,
         maxChars: normalizeMaxChars(maxChars),
       },
     );
@@ -68,6 +80,16 @@ router.post("/", async (req, res) => {
     history.push({ role: "user", content: message });
     history.push(response);
     sessions.set(sid, history);
+
+    await persistReviewRecord({
+      lessonId: safeSelectedSources[0] || null,
+      sessionId: sid,
+      mode: normalizedMode,
+      action: normalizedAction,
+      userPrompt: message,
+      aiContent: response.content,
+      sources: response.sources,
+    });
 
     // 回傳結果
     res.json({
@@ -109,6 +131,15 @@ router.post("/analyze", async (req, res) => {
       },
     );
 
+    await persistReviewRecord({
+      lessonId: lesson.lessonId,
+      mode: "quick-action",
+      action: "analyze",
+      userPrompt: message,
+      aiContent: response.content,
+      sources: response.sources,
+    });
+
     res.json(response);
   } catch (error) {
     handleAiRouteError(res, "分析教案時發生錯誤", error);
@@ -145,6 +176,15 @@ router.post("/score", async (req, res) => {
       },
     );
 
+    await persistReviewRecord({
+      lessonId: lesson.lessonId,
+      mode: "quick-action",
+      action: "score",
+      userPrompt: message,
+      aiContent: response.content,
+      sources: response.sources,
+    });
+
     res.json(response);
   } catch (error) {
     handleAiRouteError(res, "評估教案時發生錯誤", error);
@@ -180,6 +220,15 @@ router.post("/suggest", async (req, res) => {
         maxChars: normalizeMaxChars(maxChars, 300),
       },
     );
+
+    await persistReviewRecord({
+      lessonId: lesson.lessonId,
+      mode: "quick-action",
+      action: "suggest",
+      userPrompt: message,
+      aiContent: response.content,
+      sources: response.sources,
+    });
 
     res.json(response);
   } catch (error) {
@@ -230,6 +279,15 @@ router.post("/compare", async (req, res) => {
       },
     );
 
+    await persistReviewRecord({
+      lessonId: lessons[0]?.lessonId,
+      mode: "chat-free",
+      action: "compare",
+      userPrompt: message,
+      aiContent: response.content,
+      sources: response.sources,
+    });
+
     res.json(response);
   } catch (error) {
     handleAiRouteError(res, "比較教案時發生錯誤", error);
@@ -269,7 +327,7 @@ router.get("/criteria", (req, res) => {
  */
 router.post("/modify-comment", async (req, res) => {
   try {
-    const { originalComment, instruction } = req.body;
+    const { originalComment, instruction, lessonId } = req.body;
 
     // 驗證輸入
     if (!originalComment || typeof originalComment !== "string") {
@@ -306,6 +364,15 @@ ${instruction}
     // 呼叫 Gemini API
     const geminiClient = require("../services/geminiClient");
     const modifiedComment = await geminiClient.generateResponse(prompt);
+
+    await persistReviewRecord({
+      lessonId: normalizeLessonId(lessonId),
+      mode: "review-formal",
+      action: "modify",
+      userPrompt: instruction,
+      aiContent: modifiedComment.trim(),
+      sources: [],
+    });
 
     res.json({
       success: true,
@@ -361,6 +428,15 @@ function normalizeAction(action) {
   return action;
 }
 
+function normalizeLessonId(rawLessonId) {
+  const lessonId = Number.parseFloat(rawLessonId);
+  if (!Number.isFinite(lessonId)) {
+    return null;
+  }
+
+  return lessonId;
+}
+
 function normalizeMaxChars(maxChars, fallback) {
   const parsed = Number.parseInt(maxChars, 10);
 
@@ -371,14 +447,86 @@ function normalizeMaxChars(maxChars, fallback) {
   return fallback;
 }
 
-async function findLessonById(rawLessonId) {
-  const lessonId = parseFloat(rawLessonId);
+function normalizeSelectedSources(selectedSources) {
+  if (!Array.isArray(selectedSources)) {
+    return [];
+  }
 
-  if (Number.isNaN(lessonId)) {
+  return selectedSources
+    .map((item) => normalizeLessonId(item))
+    .filter((id) => Number.isFinite(id));
+}
+
+function sanitizeChatHistory(rawHistory) {
+  if (!Array.isArray(rawHistory)) {
+    return [];
+  }
+
+  const normalized = rawHistory
+    .map((item) => {
+      const role = item?.role === "assistant" ? "assistant" : "user";
+      const content = String(item?.content || "").trim();
+      return { role, content };
+    })
+    .filter((item) => item.content.length > 0)
+    .slice(-20);
+
+  while (normalized.length > 0 && normalized[0].role !== "user") {
+    normalized.shift();
+  }
+
+  return normalized;
+}
+
+async function findLessonById(rawLessonId) {
+  const lessonId = normalizeLessonId(rawLessonId);
+
+  if (!lessonId) {
     return null;
   }
 
   return Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+}
+
+async function safeFindLessonById(rawLessonId) {
+  try {
+    return await findLessonById(rawLessonId);
+  } catch (error) {
+    console.warn("查詢教案失敗，略過來源不影響主流程:", error.message);
+    return null;
+  }
+}
+
+async function persistReviewRecord(payload = {}) {
+  try {
+    const lessonId = normalizeLessonId(payload.lessonId);
+    if (!lessonId || !payload.aiContent) {
+      return;
+    }
+
+    const lesson = await findLessonById(lessonId);
+    if (!lesson) {
+      return;
+    }
+
+    const reviewId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    await ReviewRecord.create({
+      reviewId,
+      lessonId,
+      contentHash: lesson.contentHash || "",
+      sessionId: payload.sessionId || "",
+      mode: payload.mode || "chat-free",
+      action: payload.action || "free",
+      userPrompt: payload.userPrompt || "",
+      aiContent: payload.aiContent,
+      sources: Array.isArray(payload.sources)
+        ? payload.sources.map((item) => String(item))
+        : [],
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.warn("儲存評論紀錄失敗，略過不影響主流程:", error.message);
+  }
 }
 
 module.exports = router;

@@ -21,6 +21,14 @@
       return origin;
     }
 
+    if (isLocalHttp && port === "3000") {
+      return origin;
+    }
+
+    if (origin && origin !== "null") {
+      return origin;
+    }
+
     return DEFAULT_API_ORIGIN;
   }
 

@@ -44,6 +44,30 @@
       </div>
     </div>
 
+    <div id="duplicateModal" class="duplicate-modal" hidden>
+      <div class="duplicate-modal__card" role="dialog" aria-modal="true">
+        <h2>偵測到相同教案資料</h2>
+        <p id="duplicateSummary" class="duplicate-modal__summary"></p>
+        <ul id="duplicateList" class="duplicate-modal__list"></ul>
+        <div class="duplicate-modal__actions">
+          <button
+            id="reuseHistoryBtn"
+            class="duplicate-modal__btn"
+            type="button"
+          >
+            顯示之前資料
+          </button>
+          <button
+            id="clearHistoryBtn"
+            class="duplicate-modal__btn duplicate-modal__btn--danger"
+            type="button"
+          >
+            清除之前資料
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="./api.js"></script>
     <script src="./upload.js"></script>
   </body>
