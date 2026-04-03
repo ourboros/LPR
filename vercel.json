@@ -5,6 +5,13 @@
       "maxDuration": 60
     }
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/app/upload.html",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/health",
@@ -19,8 +26,8 @@
       "destination": "/lesson-review-ui/$1"
     },
     {
-      "source": "/",
-      "destination": "/lesson-review-ui/upload.html"
+      "source": "/assets/(.*)",
+      "destination": "/lesson-review-ui/assets/$1"
     }
   ]
 }
