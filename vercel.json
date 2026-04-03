@@ -12,7 +12,7 @@
     },
     {
       "source": "/app",
-      "destination": "/app/upload.html"
+      "destination": "/lesson-review-ui/upload.html"
     },
     {
       "source": "/app/(.*)",
@@ -20,7 +20,7 @@
     },
     {
       "source": "/",
-      "destination": "/app/upload.html"
+      "destination": "/lesson-review-ui/upload.html"
     }
   ]
 }
