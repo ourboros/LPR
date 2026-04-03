@@ -147,10 +147,48 @@ function showDuplicateModal(result) {
   duplicateModal.hidden = false;
 }
 
+function getReusableLessonFromDuplicateResult(result) {
+  const lessons = Array.isArray(result?.matchedLessons)
+    ? result.matchedLessons
+    : [];
+
+  if (lessons.length === 0) {
+    return null;
+  }
+
+  const preferredLesson = lessons[0];
+  return {
+    id:
+      preferredLesson.canonicalLessonId ||
+      preferredLesson.id ||
+      preferredLesson.lessonId,
+    name: preferredLesson.name || "未命名教案",
+  };
+}
+
 async function resolveDuplicate(action) {
   if (!pendingUploadResult) {
     hideDuplicateModal();
     setStatus("未找到待處理的重複教案資料，請重新上傳。", "error");
+    return;
+  }
+
+  if (action === "reuse-history") {
+    const reusableLesson =
+      getReusableLessonFromDuplicateResult(pendingUploadResult);
+
+    if (!reusableLesson) {
+      hideDuplicateModal();
+      setStatus("找不到可重用的舊教案資料，請重新上傳。", "error");
+      return;
+    }
+
+    hideDuplicateModal();
+    sessionStorage.setItem("historyAction", "reused");
+    finalizeUploadAndRedirect(
+      reusableLesson,
+      "✓ 已載入先前資料，正在進入系統...",
+    );
     return;
   }
 
