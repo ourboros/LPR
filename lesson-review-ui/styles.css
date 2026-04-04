@@ -117,6 +117,23 @@ body {
   width: 100%;
 }
 
+.nav-auth-button .fa-google {
+  background: linear-gradient(
+    45deg,
+    #4285f4 0%,
+    #4285f4 35%,
+    #34a853 35%,
+    #34a853 58%,
+    #fbbc05 58%,
+    #fbbc05 78%,
+    #ea4335 78%,
+    #ea4335 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .sidebar-collapsed .nav-item {
   justify-content: center;
   padding: 14px 6px;

@@ -169,14 +169,14 @@ body {
 .upload-auth-inline__icon {
   font-size: 1rem;
   background: linear-gradient(
-    45deg,
+    90deg,
     #4285f4 0%,
-    #4285f4 35%,
-    #34a853 35%,
-    #34a853 58%,
-    #fbbc05 58%,
-    #fbbc05 78%,
-    #ea4335 78%,
+    #4285f4 26%,
+    #34a853 26%,
+    #34a853 50%,
+    #fbbc05 50%,
+    #fbbc05 74%,
+    #ea4335 74%,
     #ea4335 100%
   );
   -webkit-background-clip: text;
