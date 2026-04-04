@@ -1,5 +1,9 @@
 const jwt = require("jsonwebtoken");
 
+function generateGuestSessionId() {
+  return `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 /**
  * 驗證 JWT token 中間件
  * 設置 req.user 對象（如果驗證成功）
@@ -13,8 +17,11 @@ function verifyTokenMiddleware(options = {}) {
 
     if (!authHeader) {
       if (allowGuest) {
+        const sessionId =
+          req.headers["x-session-id"] || generateGuestSessionId();
         req.user = null;
-        req.sessionId = req.headers["x-session-id"] || null;
+        req.sessionId = sessionId;
+        res.setHeader("x-session-id", sessionId);
         return next();
       }
       return res.status(401).json({
@@ -26,8 +33,11 @@ function verifyTokenMiddleware(options = {}) {
     const match = authHeader.match(/^Bearer\s+(.+)$/);
     if (!match) {
       if (allowGuest) {
+        const sessionId =
+          req.headers["x-session-id"] || generateGuestSessionId();
         req.user = null;
-        req.sessionId = req.headers["x-session-id"] || null;
+        req.sessionId = sessionId;
+        res.setHeader("x-session-id", sessionId);
         return next();
       }
       return res.status(401).json({
@@ -45,8 +55,11 @@ function verifyTokenMiddleware(options = {}) {
       next();
     } catch (error) {
       if (allowGuest) {
+        const sessionId =
+          req.headers["x-session-id"] || generateGuestSessionId();
         req.user = null;
-        req.sessionId = req.headers["x-session-id"] || null;
+        req.sessionId = sessionId;
+        res.setHeader("x-session-id", sessionId);
         return next();
       }
 

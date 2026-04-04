@@ -67,6 +67,11 @@ const lessonSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    sessionExpiry: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     versionKey: false,
@@ -75,7 +80,7 @@ const lessonSchema = new mongoose.Schema(
 
 lessonSchema.index({ canonicalLessonId: 1, uploadDate: -1 });
 lessonSchema.index({ normalizedName: 1, size: 1, type: 1 });
-lessonSchema.index({ userId: 1, createdAt: -1 });
-lessonSchema.index({ sessionId: 1, createdAt: -1 });
+lessonSchema.index({ userId: 1, uploadDate: -1 });
+lessonSchema.index({ sessionId: 1, uploadDate: -1 });
 
 module.exports = mongoose.model("Lesson", lessonSchema);

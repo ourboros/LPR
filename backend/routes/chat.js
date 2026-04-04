@@ -4,12 +4,27 @@
 
 const express = require("express");
 const router = express.Router();
+const { verifyTokenMiddleware } = require("../middleware/auth");
 const ragService = require("../services/rag-simple");
 const Lesson = require("../models/Lesson");
 const ReviewRecord = require("../models/ReviewRecord");
 
 // 記憶體儲存（簡單實作）
 const sessions = new Map();
+
+router.use(verifyTokenMiddleware({ allowGuest: true }));
+
+function buildLessonScopeFilter(req) {
+  if (req.user?.id) {
+    return { userId: req.user.id };
+  }
+
+  if (req.sessionId) {
+    return { userId: null, sessionId: req.sessionId };
+  }
+
+  return { userId: null, sessionId: "__no_session__" };
+}
 
 /**
  * POST /api/chat
@@ -49,7 +64,7 @@ router.post("/", async (req, res) => {
       const lessonSections = [];
 
       for (const sourceId of safeSelectedSources) {
-        const lesson = await safeFindLessonById(sourceId);
+        const lesson = await safeFindLessonById(sourceId, req);
         if (lesson) {
           lessonSections.push(`【${lesson.name}】\n${lesson.content}`);
         }
@@ -84,6 +99,8 @@ router.post("/", async (req, res) => {
     await persistReviewRecord({
       lessonId: safeSelectedSources[0] || null,
       sessionId: sid,
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: normalizedMode,
       action: normalizedAction,
       userPrompt: message,
@@ -113,7 +130,7 @@ router.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = await findLessonById(lessonId);
+    const lesson = await findLessonById(lessonId, req);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -133,6 +150,8 @@ router.post("/analyze", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "analyze",
       userPrompt: message,
@@ -158,7 +177,7 @@ router.post("/score", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = await findLessonById(lessonId);
+    const lesson = await findLessonById(lessonId, req);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -178,6 +197,8 @@ router.post("/score", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "score",
       userPrompt: message,
@@ -203,7 +224,7 @@ router.post("/suggest", async (req, res) => {
       return res.status(400).json({ error: "請提供教案 ID" });
     }
 
-    const lesson = await findLessonById(lessonId);
+    const lesson = await findLessonById(lessonId, req);
     if (!lesson) {
       return res.status(404).json({ error: "找不到指定的教案" });
     }
@@ -223,6 +244,8 @@ router.post("/suggest", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "suggest",
       userPrompt: message,
@@ -250,7 +273,7 @@ router.post("/compare", async (req, res) => {
 
     const lessons = [];
     for (const id of lessonIds) {
-      const lesson = await findLessonById(id);
+      const lesson = await findLessonById(id, req);
       if (lesson) {
         lessons.push(lesson);
       }
@@ -281,6 +304,8 @@ router.post("/compare", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lessons[0]?.lessonId,
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "chat-free",
       action: "compare",
       userPrompt: message,
@@ -367,6 +392,8 @@ ${instruction}
 
     await persistReviewRecord({
       lessonId: normalizeLessonId(lessonId),
+      userId: req.user?.id || null,
+      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "review-formal",
       action: "modify",
       userPrompt: instruction,
@@ -478,19 +505,25 @@ function sanitizeChatHistory(rawHistory) {
   return normalized;
 }
 
-async function findLessonById(rawLessonId) {
+async function findLessonById(rawLessonId, req) {
   const lessonId = normalizeLessonId(rawLessonId);
 
   if (!lessonId) {
     return null;
   }
 
-  return Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+  return Lesson.findOne(
+    {
+      ...buildLessonScopeFilter(req),
+      lessonId,
+    },
+    { _id: 0, __v: 0 },
+  ).lean();
 }
 
-async function safeFindLessonById(rawLessonId) {
+async function safeFindLessonById(rawLessonId, req) {
   try {
-    return await findLessonById(rawLessonId);
+    return await findLessonById(rawLessonId, req);
   } catch (error) {
     console.warn("查詢教案失敗，略過來源不影響主流程:", error.message);
     return null;
@@ -504,7 +537,10 @@ async function persistReviewRecord(payload = {}) {
       return;
     }
 
-    const lesson = await findLessonById(lessonId);
+    const lesson = await findLessonById(lessonId, {
+      user: payload.userId ? { id: payload.userId } : null,
+      sessionId: payload.guestScopeSessionId || null,
+    });
     if (!lesson) {
       return;
     }
@@ -515,6 +551,7 @@ async function persistReviewRecord(payload = {}) {
       lessonId,
       contentHash: lesson.contentHash || "",
       sessionId: payload.sessionId || "",
+      userId: payload.userId || null,
       mode: payload.mode || "chat-free",
       action: payload.action || "free",
       userPrompt: payload.userPrompt || "",

@@ -7,10 +7,16 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require("path");
+const { initCleanupGuestDataJob } = require("./jobs/cleanup-guest-data");
 
 function createApp() {
   const app = express();
   const uiRoot = path.join(__dirname, "../lesson-review-ui");
+
+  if (!global.__lprGuestCleanupJobInitialized) {
+    initCleanupGuestDataJob();
+    global.__lprGuestCleanupJobInitialized = true;
+  }
 
   app.use(
     cors({

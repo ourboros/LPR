@@ -4,11 +4,13 @@
     currentLessonId: "currentLessonId",
     currentLessonName: "currentLessonName",
     sidebarCollapsed: "sidebarCollapsed",
+    guestSessionId: "guestSessionId",
   };
   const LEGACY_STORAGE_KEYS = {
     currentLessonId: "lpr.currentLessonId",
     currentLessonName: "lpr.currentLessonName",
     sidebarCollapsed: "lpr.sidebarCollapsed",
+    guestSessionId: "lpr.guestSessionId",
   };
 
   function resolveApiOrigin() {
@@ -59,6 +61,15 @@
   }
 
   async function parseResponse(response) {
+    const responseSessionId = response.headers.get("x-session-id");
+    if (responseSessionId) {
+      setStoredValue(
+        STORAGE_KEYS.guestSessionId,
+        LEGACY_STORAGE_KEYS.guestSessionId,
+        responseSessionId,
+      );
+    }
+
     const contentType = response.headers.get("content-type") || "";
     const isJson = contentType.includes("application/json");
     const payload = isJson ? await response.json() : await response.text();
@@ -111,6 +122,14 @@
 
       if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
+      }
+
+      const guestSessionId = getStoredValue(
+        STORAGE_KEYS.guestSessionId,
+        LEGACY_STORAGE_KEYS.guestSessionId,
+      );
+      if (guestSessionId && !headers.has("x-session-id")) {
+        headers.set("x-session-id", guestSessionId);
       }
 
       requestOptions.headers = headers;
@@ -187,4 +206,26 @@
       });
     },
   };
+
+  // 離開頁面時嘗試清除 guest session 資料（已登入使用者不會受影響）
+  window.addEventListener("beforeunload", () => {
+    const guestSessionId = getStoredValue(
+      STORAGE_KEYS.guestSessionId,
+      LEGACY_STORAGE_KEYS.guestSessionId,
+    );
+
+    if (!guestSessionId) {
+      return;
+    }
+
+    const endpoint = `${API_BASE_URL}/upload/guest-session/close`;
+    const payload = JSON.stringify({ sessionId: guestSessionId });
+    const blob = new Blob([payload], { type: "application/json" });
+
+    try {
+      navigator.sendBeacon(endpoint, blob);
+    } catch (error) {
+      // unload 階段不阻塞，失敗時依賴後端 cron 清理
+    }
+  });
 })();

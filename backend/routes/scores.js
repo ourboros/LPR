@@ -4,8 +4,23 @@
 
 const express = require("express");
 const router = express.Router();
+const { verifyTokenMiddleware } = require("../middleware/auth");
 const Score = require("../models/Score");
 const Lesson = require("../models/Lesson");
+
+router.use(verifyTokenMiddleware({ allowGuest: true }));
+
+function buildScoreScopeFilter(req) {
+  if (req.user?.id) {
+    return { userId: req.user.id };
+  }
+
+  if (req.sessionId) {
+    return { userId: null, sessionId: req.sessionId };
+  }
+
+  return { userId: null, sessionId: "__no_session__" };
+}
 
 function generateNumericId() {
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
@@ -20,8 +35,14 @@ function normalizeLessonId(rawLessonId) {
   return lessonId;
 }
 
-async function resolveHistoryLessonIds(lessonId) {
-  const lesson = await Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+async function resolveHistoryLessonIds(lessonId, req) {
+  const lesson = await Lesson.findOne(
+    {
+      ...buildScoreScopeFilter(req),
+      lessonId,
+    },
+    { _id: 0, __v: 0 },
+  ).lean();
   if (!lesson) {
     return [];
   }
@@ -29,6 +50,7 @@ async function resolveHistoryLessonIds(lessonId) {
   const canonicalLessonId = lesson.canonicalLessonId || lesson.lessonId;
   const relatedLessons = await Lesson.find(
     {
+      ...buildScoreScopeFilter(req),
       $or: [{ canonicalLessonId }, { lessonId: canonicalLessonId }],
     },
     { _id: 0, lessonId: 1 },
@@ -78,6 +100,8 @@ router.post("/", async (req, res) => {
       scores,
       total: Math.round(calculatedTotal * 10) / 10, // 四捨五入到小數點第一位
       comment: comment || "",
+      userId: req.user?.id || null,
+      sessionId: req.user ? null : req.sessionId || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -109,7 +133,10 @@ router.get("/lesson/:lessonId", async (req, res) => {
       return res.status(400).json({ error: "無效的 lessonId" });
     }
 
-    const scores = await Score.find({ lessonId }, { _id: 0, __v: 0 })
+    const scores = await Score.find(
+      { ...buildScoreScopeFilter(req), lessonId },
+      { _id: 0, __v: 0 },
+    )
       .sort({ createdAt: -1 })
       .lean();
 
@@ -135,13 +162,16 @@ router.get("/history/:lessonId", async (req, res) => {
       return res.status(400).json({ error: "無效的 lessonId" });
     }
 
-    const lessonIds = await resolveHistoryLessonIds(lessonId);
+    const lessonIds = await resolveHistoryLessonIds(lessonId, req);
     if (lessonIds.length === 0) {
       return res.json({ lessonIds: [], scores: [] });
     }
 
     const scores = await Score.find(
-      { lessonId: { $in: lessonIds } },
+      {
+        ...buildScoreScopeFilter(req),
+        lessonId: { $in: lessonIds },
+      },
       { _id: 0, __v: 0 },
     )
       .sort({ createdAt: -1 })
@@ -164,7 +194,10 @@ router.get("/history/:lessonId", async (req, res) => {
 router.get("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const score = await Score.findOne({ scoreId }, { _id: 0, __v: 0 }).lean();
+    const score = await Score.findOne(
+      { ...buildScoreScopeFilter(req), scoreId },
+      { _id: 0, __v: 0 },
+    ).lean();
 
     if (!score) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
@@ -187,7 +220,10 @@ router.get("/:scoreId", async (req, res) => {
 router.put("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const existingScore = await Score.findOne({ scoreId });
+    const existingScore = await Score.findOne({
+      ...buildScoreScopeFilter(req),
+      scoreId,
+    });
 
     if (!existingScore) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
@@ -244,13 +280,16 @@ router.put("/:scoreId", async (req, res) => {
 router.delete("/:scoreId", async (req, res) => {
   try {
     const scoreId = parseFloat(req.params.scoreId);
-    const score = await Score.findOne({ scoreId });
+    const score = await Score.findOne({
+      ...buildScoreScopeFilter(req),
+      scoreId,
+    });
 
     if (!score) {
       return res.status(404).json({ error: "找不到指定的評分記錄" });
     }
 
-    await Score.deleteOne({ scoreId });
+    await Score.deleteOne({ ...buildScoreScopeFilter(req), scoreId });
 
     res.json({
       success: true,
@@ -271,7 +310,10 @@ router.delete("/:scoreId", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const scores = await Score.find({}, { _id: 0, __v: 0 })
+    const scores = await Score.find(buildScoreScopeFilter(req), {
+      _id: 0,
+      __v: 0,
+    })
       .sort({ createdAt: -1 })
       .lean();
 

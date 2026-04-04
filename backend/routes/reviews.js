@@ -1,7 +1,22 @@
 const express = require("express");
 const router = express.Router();
+const { verifyTokenMiddleware } = require("../middleware/auth");
 const ReviewRecord = require("../models/ReviewRecord");
 const Lesson = require("../models/Lesson");
+
+router.use(verifyTokenMiddleware({ allowGuest: true }));
+
+function buildReviewScopeFilter(req) {
+  if (req.user?.id) {
+    return { userId: req.user.id };
+  }
+
+  if (req.sessionId) {
+    return { userId: null, sessionId: req.sessionId };
+  }
+
+  return { userId: null, sessionId: "__no_session__" };
+}
 
 function normalizeLessonId(rawLessonId) {
   const lessonId = Number.parseFloat(rawLessonId);
@@ -12,8 +27,14 @@ function normalizeLessonId(rawLessonId) {
   return lessonId;
 }
 
-async function resolveHistoryLessonIds(lessonId) {
-  const lesson = await Lesson.findOne({ lessonId }, { _id: 0, __v: 0 }).lean();
+async function resolveHistoryLessonIds(lessonId, req) {
+  const lesson = await Lesson.findOne(
+    {
+      ...buildReviewScopeFilter(req),
+      lessonId,
+    },
+    { _id: 0, __v: 0 },
+  ).lean();
   if (!lesson) {
     return [];
   }
@@ -21,6 +42,7 @@ async function resolveHistoryLessonIds(lessonId) {
   const canonicalLessonId = lesson.canonicalLessonId || lesson.lessonId;
   const relatedLessons = await Lesson.find(
     {
+      ...buildReviewScopeFilter(req),
       $or: [{ canonicalLessonId }, { lessonId: canonicalLessonId }],
     },
     { _id: 0, lessonId: 1 },
@@ -42,7 +64,11 @@ router.get("/lesson/:lessonId", async (req, res) => {
     }
 
     const reviews = await ReviewRecord.find(
-      { lessonId, deletedAt: null },
+      {
+        ...buildReviewScopeFilter(req),
+        lessonId,
+        deletedAt: null,
+      },
       { _id: 0, __v: 0 },
     )
       .sort({ createdAt: -1 })
@@ -61,13 +87,14 @@ router.get("/history/:lessonId", async (req, res) => {
       return res.status(400).json({ error: "無效的 lessonId" });
     }
 
-    const lessonIds = await resolveHistoryLessonIds(lessonId);
+    const lessonIds = await resolveHistoryLessonIds(lessonId, req);
     if (lessonIds.length === 0) {
       return res.json({ lessonIds: [], reviews: [] });
     }
 
     const reviews = await ReviewRecord.find(
       {
+        ...buildReviewScopeFilter(req),
         lessonId: { $in: lessonIds },
         deletedAt: null,
       },
@@ -92,11 +119,12 @@ router.delete("/lesson/:lessonId", async (req, res) => {
     const scope = req.query.scope === "history" ? "history" : "current";
     const lessonIds =
       scope === "history"
-        ? await resolveHistoryLessonIds(lessonId)
+        ? await resolveHistoryLessonIds(lessonId, req)
         : [lessonId];
 
     const result = await ReviewRecord.updateMany(
       {
+        ...buildReviewScopeFilter(req),
         lessonId: { $in: lessonIds },
         deletedAt: null,
       },
@@ -124,7 +152,7 @@ router.delete("/:reviewId", async (req, res) => {
     }
 
     const result = await ReviewRecord.updateOne(
-      { reviewId, deletedAt: null },
+      { ...buildReviewScopeFilter(req), reviewId, deletedAt: null },
       { $set: { deletedAt: new Date() } },
     );
 
