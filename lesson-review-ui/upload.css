@@ -137,13 +137,15 @@ body {
 .upload-auth-inline__button {
   width: auto;
   min-width: 210px;
-  padding: 10px 18px;
+  min-height: 42px;
+  padding: 10px 20px;
   border: 1px solid #dadce0;
-  border-radius: 10px;
+  border-radius: 999px;
   background: #ffffff;
-  color: #1f1f1f;
-  font-size: 1rem;
+  color: #3c4043;
+  font-size: 0.96rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: all 0.3s ease;
   display: inline-flex;
@@ -154,8 +156,9 @@ body {
 }
 
 .upload-auth-inline__button:hover {
-  background: #f8fafd;
-  border-color: #c6cbd1;
+  background: #f8f9fa;
+  border-color: #ccd0d5;
+  box-shadow: 0 2px 5px rgba(60, 64, 67, 0.2);
 }
 
 .upload-auth-inline__button:focus-visible {
@@ -164,8 +167,21 @@ body {
 }
 
 .upload-auth-inline__icon {
-  color: #4285f4;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  background: linear-gradient(
+    45deg,
+    #4285f4 0%,
+    #4285f4 35%,
+    #34a853 35%,
+    #34a853 58%,
+    #fbbc05 58%,
+    #fbbc05 78%,
+    #ea4335 78%,
+    #ea4335 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .upload-btn {

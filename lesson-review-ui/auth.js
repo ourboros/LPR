@@ -1,10 +1,13 @@
 (function initializeGoogleAuth() {
   const GOOGLE_CLIENT_ID =
     "1093022180573-2a2h5iridfvbjtqbig5av2gto2kqcui1.apps.googleusercontent.com";
+  const GOOGLE_GSI_SRC = "https://accounts.google.com/gsi/client";
 
   const AUTH_STORAGE_KEY = "lprAuthToken";
   const AUTH_USER_KEY = "lprAuthUser";
   let googleAuthReadyPromise = null;
+  let googleScriptPromise = null;
+  let googleInitialized = false;
 
   // ============================================
   // Token Management
@@ -52,27 +55,77 @@
   // Google OAuth Integration
   // ============================================
 
+  function loadGoogleScript() {
+    if (window.google?.accounts?.id) {
+      return Promise.resolve(true);
+    }
+
+    if (googleScriptPromise) {
+      return googleScriptPromise;
+    }
+
+    googleScriptPromise = new Promise((resolve, reject) => {
+      const existingScript = document.querySelector(
+        `script[src="${GOOGLE_GSI_SRC}"]`,
+      );
+
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Google 登入元件載入逾時，請檢查網路或重整頁面。"));
+      }, 8000);
+
+      function onReady() {
+        if (window.google?.accounts?.id) {
+          clearTimeout(timeoutId);
+          resolve(true);
+        }
+      }
+
+      function onError() {
+        clearTimeout(timeoutId);
+        reject(new Error("無法載入 Google 登入元件。"));
+      }
+
+      if (existingScript) {
+        existingScript.addEventListener("load", onReady, { once: true });
+        existingScript.addEventListener("error", onError, { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = GOOGLE_GSI_SRC;
+      script.async = true;
+      script.defer = true;
+      script.addEventListener("load", onReady, { once: true });
+      script.addEventListener("error", onError, { once: true });
+      document.head.appendChild(script);
+    });
+
+    return googleScriptPromise;
+  }
+
   async function initGoogleAuth() {
     if (googleAuthReadyPromise) {
       return googleAuthReadyPromise;
     }
 
-    googleAuthReadyPromise = new Promise((resolve) => {
-      function checkGoogleReady() {
-        if (window.google?.accounts?.id) {
-          window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleGoogleCallback,
-            auto_select: false,
-          });
-          resolve(true);
-        } else {
-          setTimeout(checkGoogleReady, 100);
-        }
+    googleAuthReadyPromise = (async () => {
+      await loadGoogleScript();
+
+      if (!window.google?.accounts?.id) {
+        throw new Error("Google 登入元件尚未載入完成");
       }
 
-      checkGoogleReady();
-    });
+      if (!googleInitialized) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCallback,
+          auto_select: false,
+        });
+        googleInitialized = true;
+      }
+
+      return true;
+    })();
 
     return googleAuthReadyPromise;
   }
@@ -84,7 +137,15 @@
       throw new Error("Google 登入元件尚未載入完成");
     }
 
-    window.google.accounts.id.prompt();
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        window.dispatchEvent(
+          new CustomEvent("lpr:auth:error", {
+            detail: "Google 登入視窗未顯示，請確認瀏覽器未封鎖第三方登入。",
+          }),
+        );
+      }
+    });
   }
 
   async function handleGoogleCallback(response) {

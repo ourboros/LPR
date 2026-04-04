@@ -227,4 +227,18 @@ if (clearHistoryBtn) {
 
 document.addEventListener("DOMContentLoaded", () => {
   hideDuplicateModal();
+
+  window.addEventListener("lpr:auth:success", (event) => {
+    const userName = event.detail?.name || "使用者";
+    setStatus(`✓ 已登入：${userName}`, "success");
+  });
+
+  window.addEventListener("lpr:auth:error", (event) => {
+    const message = event.detail || "登入失敗，請稍後再試";
+    setStatus(`❌ ${message}`, "error");
+  });
+
+  window.addEventListener("lpr:auth:logout", () => {
+    setStatus("已登出", "success");
+  });
 });

@@ -64,6 +64,9 @@
         await window.LPRAuth.startGoogleLogin();
       } catch (error) {
         console.error("啟動 Google 登入失敗:", error);
+        window.dispatchEvent(
+          new CustomEvent("lpr:auth:error", { detail: error.message }),
+        );
       }
     });
   }

@@ -75,11 +75,11 @@ body {
 }
 
 .nav-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
   flex: 1;
-  justify-content: space-evenly;
   align-items: stretch;
+  gap: 10px;
 }
 
 .nav-item {
@@ -97,6 +97,24 @@ body {
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
+}
+
+.nav-auth-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.nav-auth-user {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.nav-auth-button {
+  width: 100%;
 }
 
 .sidebar-collapsed .nav-item {

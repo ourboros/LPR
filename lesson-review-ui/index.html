@@ -47,23 +47,12 @@
             <i class="nav-icon fa-solid fa-file-lines"></i>
             <span>查看教案</span>
           </button>
-          <div style="padding: 0 8px">
-            <div
-              data-auth-user
-              style="
-                font-size: 12px;
-                color: #9ca3af;
-                margin-bottom: 8px;
-                text-align: center;
-              "
-            >
-              目前未登入
-            </div>
+          <div class="nav-auth-block">
+            <div data-auth-user class="nav-auth-user">目前未登入</div>
             <button
               data-auth-button
-              class="nav-item"
+              class="nav-item nav-auth-button"
               type="button"
-              style="width: 100%"
             >
               <i class="nav-icon fa-solid fa-right-to-bracket"></i>
               <span>Google 登入</span>
