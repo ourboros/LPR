@@ -841,6 +841,9 @@ body:not(.auth-ui-ready) .nav-auth-block {
 }
 
 .lesson-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--color-action);
   font-size: 0.9rem;
   font-style: italic;
