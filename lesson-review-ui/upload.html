@@ -12,32 +12,6 @@
     <link rel="stylesheet" href="/app/upload.css" />
   </head>
   <body>
-    <div
-      class="upload-auth"
-      style="
-        position: fixed;
-        top: 12px;
-        right: 12px;
-        z-index: 10;
-        text-align: right;
-      "
-    >
-      <div
-        data-auth-user
-        style="font-size: 12px; color: #4b5563; margin-bottom: 6px"
-      >
-        目前未登入
-      </div>
-      <button
-        data-auth-button
-        type="button"
-        class="upload-btn"
-        style="width: auto; padding: 8px 12px"
-      >
-        Google 登入
-      </button>
-    </div>
-
     <div class="upload-container">
       <div class="upload-card">
         <div class="upload-icon">
@@ -62,6 +36,17 @@
           </label>
           <div id="fileName" class="file-name"></div>
         </form>
+
+        <div class="upload-auth-inline">
+          <div data-auth-user class="upload-auth-inline__user">目前未登入</div>
+          <button
+            data-auth-button
+            type="button"
+            class="upload-auth-inline__button"
+          >
+            Google 登入
+          </button>
+        </div>
 
         <button id="uploadBtn" class="upload-btn" type="button" disabled>
           上傳並開始評論
