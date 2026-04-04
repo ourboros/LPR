@@ -198,6 +198,42 @@
     getUserInfo() {
       return window.LPRAuth?.getUserInfo?.() || null;
     },
+    async closeGuestSession() {
+      const guestSessionId = getStoredValue(
+        STORAGE_KEYS.guestSessionId,
+        LEGACY_STORAGE_KEYS.guestSessionId,
+      );
+
+      if (!guestSessionId) {
+        return { success: true, skipped: true };
+      }
+
+      if (window.LPRAuth?.isAuthenticated?.()) {
+        return { success: true, skipped: true };
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/upload/guest-session/close`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-session-id": guestSessionId,
+          },
+          body: JSON.stringify({ sessionId: guestSessionId }),
+        },
+      );
+
+      if (response.ok) {
+        setStoredValue(
+          STORAGE_KEYS.guestSessionId,
+          LEGACY_STORAGE_KEYS.guestSessionId,
+          "",
+        );
+      }
+
+      return parseResponse(response);
+    },
     logout() {
       return window.LPRAuth?.logout?.();
     },
@@ -220,30 +256,4 @@
       });
     },
   };
-
-  // 離開頁面時嘗試清除 guest session 資料（已登入使用者不會受影響）
-  window.addEventListener("beforeunload", () => {
-    const guestSessionId = getStoredValue(
-      STORAGE_KEYS.guestSessionId,
-      LEGACY_STORAGE_KEYS.guestSessionId,
-    );
-
-    if (!guestSessionId) {
-      return;
-    }
-
-    if (window.LPRAuth?.isAuthenticated?.()) {
-      return;
-    }
-
-    const endpoint = `${API_BASE_URL}/upload/guest-session/close`;
-    const payload = JSON.stringify({ sessionId: guestSessionId });
-    const blob = new Blob([payload], { type: "application/json" });
-
-    try {
-      navigator.sendBeacon(endpoint, blob);
-    } catch (error) {
-      // unload 階段不阻塞，失敗時依賴後端 cron 清理
-    }
-  });
 })();
