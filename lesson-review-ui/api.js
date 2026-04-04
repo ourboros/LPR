@@ -124,6 +124,11 @@
         headers.set("Accept", "application/json");
       }
 
+      const authToken = window.LPRAuth?.getAuthToken?.();
+      if (authToken && !headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${authToken}`);
+      }
+
       const guestSessionId = getStoredValue(
         STORAGE_KEYS.guestSessionId,
         LEGACY_STORAGE_KEYS.guestSessionId,
@@ -187,6 +192,15 @@
         String(Boolean(isCollapsed)),
       );
     },
+    isAuthenticated() {
+      return Boolean(window.LPRAuth?.isAuthenticated?.());
+    },
+    getUserInfo() {
+      return window.LPRAuth?.getUserInfo?.() || null;
+    },
+    logout() {
+      return window.LPRAuth?.logout?.();
+    },
     formatDate(value) {
       if (!value) {
         return "未提供";
@@ -215,6 +229,10 @@
     );
 
     if (!guestSessionId) {
+      return;
+    }
+
+    if (window.LPRAuth?.isAuthenticated?.()) {
       return;
     }
 

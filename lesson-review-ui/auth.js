@@ -2,7 +2,7 @@
   const GOOGLE_CLIENT_ID =
     "1093022180573-2a2h5iridfvbjtqbig5av2gto2kqcui1.apps.googleusercontent.com";
 
-  const AUTH_STORAGE_KEY = "lrpAuthToken";
+  const AUTH_STORAGE_KEY = "lprAuthToken";
   const AUTH_USER_KEY = "lprAuthUser";
 
   // ============================================
@@ -225,6 +225,7 @@
 
   window.LPRAuth = {
     initGoogleAuth,
+    handleGoogleCallback,
     getAuthToken,
     setAuthToken,
     clearAuthToken,
