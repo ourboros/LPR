@@ -39,11 +39,11 @@ function createApp() {
   const generateRoutes = require("./routes/generate");
   const reviewRoutes = require("./routes/reviews");
 
-  app.use("/api/chat", chatRoutes);
-  app.use("/api/upload", uploadRoutes);
-  app.use("/api/scores", scoreRoutes);
-  app.use("/api/generate", generateRoutes);
-  app.use("/api/reviews", reviewRoutes);
+  app.use("/chat", chatRoutes);
+  app.use("/upload", uploadRoutes);
+  app.use("/scores", scoreRoutes);
+  app.use("/generate", generateRoutes);
+  app.use("/reviews", reviewRoutes);
 
   app.get("/", (req, res) => {
     res.redirect("/app/upload.html");
