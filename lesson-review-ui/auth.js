@@ -139,7 +139,15 @@
 
     container.innerHTML = "";
 
-    const buttonWidth = Math.max(container.clientWidth || 0, 240);
+    const isSidebarAuth = container.classList.contains("nav-auth-button");
+    const containerWidth = container.clientWidth || 0;
+    const minWidth = isSidebarAuth ? 170 : 210;
+    const maxWidth = isSidebarAuth ? 200 : 320;
+    const fallbackWidth = isSidebarAuth ? 190 : 240;
+    const buttonWidth = Math.max(
+      Math.min(containerWidth || fallbackWidth, maxWidth),
+      minWidth,
+    );
 
     window.google.accounts.id.renderButton(container, {
       type: "standard",
@@ -162,12 +170,11 @@
       "upload-auth-inline__button",
     );
     const buttonClass = isUploadAuth
-      ? "upload-auth-inline__button upload-auth-inline__button--logout"
-      : "nav-item nav-auth-button nav-auth-button--logout";
+      ? "upload-auth-inline__logout-btn"
+      : "nav-auth-logout-btn";
 
     container.innerHTML = `
       <button type="button" class="${buttonClass}">
-        <i class="nav-icon fa-solid fa-right-from-bracket"></i>
         <span>登出</span>
       </button>
     `;
