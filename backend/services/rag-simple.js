@@ -179,25 +179,93 @@ class RAGSimpleService {
 
     const compressPrompt = `請將以下內容濃縮為 ${maxChars} 字以內，保留核心重點，且段落必須完整收束。\n\n要求：\n1. 不可中途截斷句子。\n2. 不可輸出未完成的條列點。\n3. 若無法剛好達到上限，寧可略少，但要完整結尾。\n\n【模式】${mode}/${action}\n\n【原始內容】\n${normalized}\n\n【教案內容節錄】\n${String(lessonContent || "").slice(0, 800)}\n\n請直接輸出濃縮結果。`;
 
+    const compressionMaxTokens = Math.max(
+      800,
+      Math.min(3072, Math.ceil(maxChars * 1.6)),
+    );
+
     try {
       const compressed = await geminiClient.generateResponse(
         compressPrompt,
         [],
         {
           temperature: 0.2,
-          maxOutputTokens: 700,
+          maxOutputTokens: compressionMaxTokens,
         },
       );
 
       const compact = String(compressed || "").trim();
       if (compact.length <= maxChars) {
-        return this.truncateAtSentenceBoundary(compact, maxChars);
+        return await this.ensureCompleteEnding(compact, maxChars, mode, action);
       }
     } catch (error) {
       console.warn("壓縮回應失敗，改用硬切字數:", error.message);
     }
 
-    return this.truncateAtSentenceBoundary(normalized, maxChars);
+    const fallback = this.truncateAtSentenceBoundary(normalized, maxChars);
+    return this.ensureCompleteEnding(fallback, maxChars, mode, action);
+  }
+
+  isLikelyCompleteEnding(text) {
+    const normalized = String(text || "").trim();
+    if (!normalized) {
+      return false;
+    }
+
+    if (/[。！？.!?」』）)]\s*$/.test(normalized)) {
+      return true;
+    }
+
+    const lines = normalized
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) {
+      return false;
+    }
+
+    const lastLine = lines[lines.length - 1];
+    return !/^[-•\d]+[.)、]?\s*$/.test(lastLine);
+  }
+
+  async ensureCompleteEnding(text, maxChars, mode, action) {
+    const normalized = String(text || "").trim();
+    if (!normalized) {
+      return normalized;
+    }
+
+    if (normalized.length > maxChars) {
+      return this.truncateAtSentenceBoundary(normalized, maxChars);
+    }
+
+    if (this.isLikelyCompleteEnding(normalized)) {
+      return normalized;
+    }
+
+    const repairPrompt = `請將以下內容改寫為「完整結尾」版本，必須在 ${maxChars} 字以內。\n\n要求：\n1. 保留原本重點與結構。\n2. 最後一句必須完整收束。\n3. 不要新增與原文無關資訊。\n\n【內容】\n${normalized}`;
+
+    try {
+      const repaired = await geminiClient.generateResponse(repairPrompt, [], {
+        temperature: 0.2,
+        maxOutputTokens: Math.max(
+          700,
+          Math.min(2048, Math.ceil(maxChars * 1.2)),
+        ),
+      });
+
+      const fixed = String(repaired || "").trim();
+      if (
+        fixed &&
+        fixed.length <= maxChars &&
+        this.isLikelyCompleteEnding(fixed)
+      ) {
+        return fixed;
+      }
+    } catch (error) {
+      console.warn("結尾修復失敗，沿用安全截斷結果:", error.message);
+    }
+
+    return normalized;
   }
 
   truncateAtSentenceBoundary(text, maxChars) {
