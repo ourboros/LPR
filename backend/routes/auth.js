@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const authService = require("../services/authService");
-const { verifyTokenMiddleware, requireAuthMiddleware } = require("../middleware/auth");
+const {
+  verifyTokenMiddleware,
+  requireAuthMiddleware,
+} = require("../middleware/auth");
 
 /**
  * POST /api/auth/google-callback
@@ -41,64 +44,78 @@ router.post("/google-callback", async (req, res) => {
  * 獲取當前登入用戶信息
  * 需要有效的 JWT token
  */
-router.get("/user", verifyTokenMiddleware(), requireAuthMiddleware, async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      user: req.user,
-    });
-  } catch (error) {
-    console.error("獲取用戶信息失敗:", error);
-    res.status(500).json({
-      error: "獲取用戶信息失敗",
-      message: error.message,
-    });
-  }
-});
+router.get(
+  "/user",
+  verifyTokenMiddleware(),
+  requireAuthMiddleware,
+  async (req, res) => {
+    try {
+      res.json({
+        success: true,
+        user: req.user,
+      });
+    } catch (error) {
+      console.error("獲取用戶信息失敗:", error);
+      res.status(500).json({
+        error: "獲取用戶信息失敗",
+        message: error.message,
+      });
+    }
+  },
+);
 
 /**
  * POST /api/auth/refresh-token
  * 刷新 JWT token
  * 需要有效的 JWT token
  */
-router.post("/refresh-token", verifyTokenMiddleware(), requireAuthMiddleware, async (req, res) => {
-  try {
-    const result = await authService.refreshToken(req.user);
+router.post(
+  "/refresh-token",
+  verifyTokenMiddleware(),
+  requireAuthMiddleware,
+  async (req, res) => {
+    try {
+      const result = await authService.refreshToken(req.user);
 
-    res.json({
-      success: true,
-      token: result.token,
-      expiresIn: result.expiresIn,
-    });
-  } catch (error) {
-    console.error("刷新令牌失敗:", error);
-    res.status(401).json({
-      error: "刷新令牌失敗",
-      message: error.message,
-    });
-  }
-});
+      res.json({
+        success: true,
+        token: result.token,
+        expiresIn: result.expiresIn,
+      });
+    } catch (error) {
+      console.error("刷新令牌失敗:", error);
+      res.status(401).json({
+        error: "刷新令牌失敗",
+        message: error.message,
+      });
+    }
+  },
+);
 
 /**
  * POST /api/auth/logout
  * 登出（可選，主要由前端清除 token）
  */
-router.post("/logout", verifyTokenMiddleware({ allowGuest: true }), async (req, res) => {
-  try {
-    // 後端邏輯：可選擇將 token 加入黑名單或其他
-    // 目前主要由前端清除 localStorage 中的 token
+router.post(
+  "/logout",
+  verifyTokenMiddleware({ allowGuest: true }),
+  async (req, res) => {
+    try {
+      // 後端邏輯：可選擇將 token 加入黑名單或其他
+      // 目前主要由前端清除 localStorage 中的 token
 
-    res.json({
-      success: true,
-      message: "登出成功",
-    });
-  } catch (error) {
-    console.error("登出失敗:", error);
-    res.status(500).json({
-      error: "登出失敗",
-      message: error.message,
-    });
-  }
-});
+      res.json({
+        success: true,
+        message: "登出成功",
+      });
+    } catch (error) {
+      console.error("登出失敗:", error);
+      res.status(500).json({
+        error: "登出失敗",
+        message: error.message,
+      });
+    }
+  },
+);
 
 module.exports = router;
