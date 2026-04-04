@@ -79,7 +79,8 @@ body {
   flex-direction: column;
   flex: 1;
   align-items: stretch;
-  gap: 10px;
+  justify-content: space-evenly;
+  gap: 0;
 }
 
 .nav-item {
@@ -105,8 +106,8 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-  padding: 0 8px 2px;
-  margin-top: auto;
+  padding: 0 8px;
+  margin-top: 0;
 }
 
 .nav-auth-user {
