@@ -3,8 +3,17 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60
+    },
+    "api/[...route].js": {
+      "maxDuration": 60
     }
   },
+  "routes": [
+    {
+      "src": "/api(?<path>/.*)?",
+      "dest": "/api/[...route].js"
+    }
+  ],
   "redirects": [
     {
       "source": "/",
