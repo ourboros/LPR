@@ -85,6 +85,7 @@ async function requestReview(message, options = {}) {
         sessionId: currentSessionId || undefined,
         mode: "review-formal",
         action: "review-formal",
+        maxChars: 1500,
       },
     });
 

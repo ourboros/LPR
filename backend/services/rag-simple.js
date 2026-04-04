@@ -177,7 +177,7 @@ class RAGSimpleService {
       return normalized;
     }
 
-    const compressPrompt = `請將以下內容濃縮為 ${maxChars} 字以內，保留核心重點，禁止超過上限。\n\n【模式】${mode}/${action}\n\n【原始內容】\n${normalized}\n\n【教案內容節錄】\n${String(lessonContent || "").slice(0, 800)}\n\n請直接輸出濃縮結果。`;
+    const compressPrompt = `請將以下內容濃縮為 ${maxChars} 字以內，保留核心重點，且段落必須完整收束。\n\n要求：\n1. 不可中途截斷句子。\n2. 不可輸出未完成的條列點。\n3. 若無法剛好達到上限，寧可略少，但要完整結尾。\n\n【模式】${mode}/${action}\n\n【原始內容】\n${normalized}\n\n【教案內容節錄】\n${String(lessonContent || "").slice(0, 800)}\n\n請直接輸出濃縮結果。`;
 
     try {
       const compressed = await geminiClient.generateResponse(
@@ -191,13 +191,58 @@ class RAGSimpleService {
 
       const compact = String(compressed || "").trim();
       if (compact.length <= maxChars) {
-        return compact;
+        return this.truncateAtSentenceBoundary(compact, maxChars);
       }
     } catch (error) {
       console.warn("壓縮回應失敗，改用硬切字數:", error.message);
     }
 
-    return normalized.slice(0, maxChars).trim();
+    return this.truncateAtSentenceBoundary(normalized, maxChars);
+  }
+
+  truncateAtSentenceBoundary(text, maxChars) {
+    const normalized = String(text || "").trim();
+    if (!normalized || normalized.length <= maxChars) {
+      return normalized;
+    }
+
+    const minLength = Math.max(1, Math.floor(maxChars * 0.85));
+    const window = normalized.slice(0, maxChars + 1);
+
+    const explicitBoundaries = [
+      "\n\n",
+      "\n",
+      "。",
+      "！",
+      "？",
+      "；",
+      ";",
+      "!",
+      "?",
+    ];
+    let bestCut = -1;
+
+    for (const marker of explicitBoundaries) {
+      const idx = window.lastIndexOf(marker);
+      if (idx >= 0) {
+        bestCut = Math.max(bestCut, idx + marker.length);
+      }
+    }
+
+    if (bestCut >= minLength) {
+      return window.slice(0, bestCut).trim();
+    }
+
+    const sentenceMatches = [...window.matchAll(/[。！？；!?]+/g)];
+    if (sentenceMatches.length > 0) {
+      const last = sentenceMatches[sentenceMatches.length - 1];
+      const endIndex = (last.index || 0) + last[0].length;
+      if (endIndex >= minLength) {
+        return window.slice(0, endIndex).trim();
+      }
+    }
+
+    return window.slice(0, maxChars).trim();
   }
 
   /**
