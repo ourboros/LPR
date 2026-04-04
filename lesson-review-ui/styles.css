@@ -115,27 +115,16 @@ body {
 
 .nav-auth-button {
   width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 body:not(.auth-ui-ready) .nav-auth-block {
   visibility: hidden;
 }
 
-.nav-auth-button .fa-google {
-  background: linear-gradient(
-    45deg,
-    #4285f4 0%,
-    #4285f4 35%,
-    #34a853 35%,
-    #34a853 58%,
-    #fbbc05 58%,
-    #fbbc05 78%,
-    #ea4335 78%,
-    #ea4335 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.nav-auth-button--logout {
+  width: 100%;
 }
 
 .sidebar-collapsed .nav-item {

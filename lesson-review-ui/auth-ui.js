@@ -7,17 +7,7 @@
     return document.querySelector("[data-auth-user]");
   }
 
-  function setButtonLabel(button, labelText) {
-    const label = button.querySelector(".auth-button-label");
-    if (label) {
-      label.textContent = labelText;
-      return;
-    }
-
-    button.textContent = labelText;
-  }
-
-  function updateAuthUi() {
+  async function updateAuthUi() {
     const button = getAuthButton();
     const userLabel = getAuthUserLabel();
 
@@ -29,7 +19,7 @@
     const user = window.LPRAuth.getUserInfo();
 
     if (isLoggedIn) {
-      setButtonLabel(button, "登出");
+      window.LPRAuth.renderLogoutButton(button);
       if (userLabel) {
         userLabel.textContent = user?.name
           ? `目前使用者：${user.name}`
@@ -38,46 +28,33 @@
       return;
     }
 
-    setButtonLabel(button, "Google 登入");
+    await window.LPRAuth.renderGoogleSignInButton(button);
     if (userLabel) {
       userLabel.textContent = "目前未登入";
     }
   }
 
-  function bindAuthButton() {
-    const button = getAuthButton();
-    if (!button) {
-      return;
+  document.addEventListener("DOMContentLoaded", async () => {
+    try {
+      await updateAuthUi();
+    } catch (error) {
+      console.error("初始化 Google 登入 UI 失敗:", error);
+      window.dispatchEvent(
+        new CustomEvent("lpr:auth:error", { detail: error.message }),
+      );
     }
-
-    button.addEventListener("click", async () => {
-      if (!window.LPRAuth) {
-        return;
-      }
-
-      if (window.LPRAuth.isAuthenticated()) {
-        await window.LPRAuth.logout();
-        return;
-      }
-
-      try {
-        await window.LPRAuth.startGoogleLogin();
-      } catch (error) {
-        console.error("啟動 Google 登入失敗:", error);
-        window.dispatchEvent(
-          new CustomEvent("lpr:auth:error", { detail: error.message }),
-        );
-      }
-    });
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    bindAuthButton();
-    updateAuthUi();
 
     document.body.classList.add("auth-ui-ready");
 
-    window.addEventListener("lpr:auth:success", updateAuthUi);
-    window.addEventListener("lpr:auth:logout", updateAuthUi);
+    window.addEventListener("lpr:auth:success", () => {
+      updateAuthUi().catch((error) => {
+        console.error("更新登入 UI 失敗:", error);
+      });
+    });
+    window.addEventListener("lpr:auth:logout", () => {
+      updateAuthUi().catch((error) => {
+        console.error("更新登出 UI 失敗:", error);
+      });
+    });
   });
 })();

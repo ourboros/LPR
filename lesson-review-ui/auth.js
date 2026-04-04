@@ -130,22 +130,54 @@
     return googleAuthReadyPromise;
   }
 
-  async function startGoogleLogin() {
+  async function renderGoogleSignInButton(container) {
     await initGoogleAuth();
 
-    if (!window.google?.accounts?.id) {
+    if (!container || !window.google?.accounts?.id) {
       throw new Error("Google 登入元件尚未載入完成");
     }
 
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        window.dispatchEvent(
-          new CustomEvent("lpr:auth:error", {
-            detail: "Google 登入視窗未顯示，請確認瀏覽器未封鎖第三方登入。",
-          }),
-        );
-      }
+    container.innerHTML = "";
+
+    const buttonWidth = Math.max(container.clientWidth || 0, 240);
+
+    window.google.accounts.id.renderButton(container, {
+      type: "standard",
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "pill",
+      locale: "zh_TW",
+      logo_alignment: "left",
+      width: buttonWidth,
     });
+  }
+
+  function renderLogoutButton(container) {
+    if (!container) {
+      return;
+    }
+
+    const isUploadAuth = container.classList.contains(
+      "upload-auth-inline__button",
+    );
+    const buttonClass = isUploadAuth
+      ? "upload-auth-inline__button upload-auth-inline__button--logout"
+      : "nav-item nav-auth-button nav-auth-button--logout";
+
+    container.innerHTML = `
+      <button type="button" class="${buttonClass}">
+        <i class="nav-icon fa-solid fa-right-from-bracket"></i>
+        <span>登出</span>
+      </button>
+    `;
+
+    const button = container.querySelector("button");
+    if (button) {
+      button.addEventListener("click", async () => {
+        await logout();
+      });
+    }
   }
 
   async function handleGoogleCallback(response) {
@@ -296,7 +328,8 @@
 
   window.LPRAuth = {
     initGoogleAuth,
-    startGoogleLogin,
+    renderGoogleSignInButton,
+    renderLogoutButton,
     handleGoogleCallback,
     getAuthToken,
     setAuthToken,
