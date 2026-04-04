@@ -397,9 +397,19 @@ commentEditorApply.addEventListener("click", async () => {
       instruction,
     );
 
-    // 替換原始文字
+    // 替換原始文字 (使用 Markdown 渲染)
     activeSelectionRange.deleteContents();
-    activeSelectionRange.insertNode(document.createTextNode(modifiedComment));
+
+    // 建立臨時容器進行 Markdown 渲染
+    const tempContainer = document.createElement("div");
+    window.LPRMarkdown.renderToContainer(tempContainer, modifiedComment);
+
+    // 使用 DocumentFragment 保留節點順序
+    const fragment = document.createDocumentFragment();
+    while (tempContainer.firstChild) {
+      fragment.appendChild(tempContainer.firstChild);
+    }
+    activeSelectionRange.insertNode(fragment);
 
     // 清除選取
     window.getSelection()?.removeAllRanges();
