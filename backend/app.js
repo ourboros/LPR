@@ -27,6 +27,8 @@ function createApp() {
         "http://127.0.0.1:5000",
       ],
       credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization", "x-session-id"],
+      exposedHeaders: ["x-session-id"],
     }),
   );
 

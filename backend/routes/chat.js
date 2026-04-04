@@ -98,9 +98,8 @@ router.post("/", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: safeSelectedSources[0] || null,
-      sessionId: sid,
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: normalizedMode,
       action: normalizedAction,
       userPrompt: message,
@@ -150,8 +149,8 @@ router.post("/analyze", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "analyze",
       userPrompt: message,
@@ -197,8 +196,8 @@ router.post("/score", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "score",
       userPrompt: message,
@@ -244,8 +243,8 @@ router.post("/suggest", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lesson.lessonId,
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "quick-action",
       action: "suggest",
       userPrompt: message,
@@ -304,8 +303,8 @@ router.post("/compare", async (req, res) => {
 
     await persistReviewRecord({
       lessonId: lessons[0]?.lessonId,
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "chat-free",
       action: "compare",
       userPrompt: message,
@@ -392,8 +391,8 @@ ${instruction}
 
     await persistReviewRecord({
       lessonId: normalizeLessonId(lessonId),
+      sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      guestScopeSessionId: req.user ? null : req.sessionId || null,
       mode: "review-formal",
       action: "modify",
       userPrompt: instruction,
@@ -539,7 +538,7 @@ async function persistReviewRecord(payload = {}) {
 
     const lesson = await findLessonById(lessonId, {
       user: payload.userId ? { id: payload.userId } : null,
-      sessionId: payload.guestScopeSessionId || null,
+      sessionId: payload.sessionId || null,
     });
     if (!lesson) {
       return;
@@ -550,7 +549,7 @@ async function persistReviewRecord(payload = {}) {
       reviewId,
       lessonId,
       contentHash: lesson.contentHash || "",
-      sessionId: payload.sessionId || "",
+      sessionId: payload.sessionId || null,
       userId: payload.userId || null,
       mode: payload.mode || "chat-free",
       action: payload.action || "free",
