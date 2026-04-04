@@ -157,11 +157,17 @@ function getReusableLessonFromDuplicateResult(result) {
   }
 
   const preferredLesson = lessons[0];
+  const candidateId =
+    preferredLesson.id ||
+    preferredLesson.lessonId ||
+    preferredLesson.canonicalLessonId;
+
+  if (!Number.isFinite(Number(candidateId))) {
+    return null;
+  }
+
   return {
-    id:
-      preferredLesson.canonicalLessonId ||
-      preferredLesson.id ||
-      preferredLesson.lessonId,
+    id: candidateId,
     name: preferredLesson.name || "未命名教案",
   };
 }

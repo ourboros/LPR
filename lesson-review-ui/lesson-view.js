@@ -53,7 +53,10 @@ async function loadLesson() {
 
 async function deleteLessonWithHistory() {
   const lessonId = window.LPR.getCurrentLessonId();
-  if (!lessonId) {
+  const numericLessonId = Number(lessonId);
+
+  if (!lessonId || !Number.isFinite(numericLessonId)) {
+    alert("無效的教案 ID，請重新上傳或重新選擇教案後再試。");
     return;
   }
 
@@ -87,7 +90,13 @@ async function deleteLessonWithHistory() {
     sessionStorage.removeItem("reviewSessionId");
     window.location.href = "./upload.html";
   } catch (error) {
-    alert(`刪除失敗：${error.message}`);
+    const message =
+      typeof error?.message === "string"
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error);
+    alert(`刪除失敗：${message}`);
   }
 }
 

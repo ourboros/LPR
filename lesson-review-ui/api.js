@@ -64,10 +64,22 @@
     const payload = isJson ? await response.json() : await response.text();
 
     if (!response.ok) {
-      const message =
-        typeof payload === "string"
-          ? payload
-          : payload.error || payload.message || `HTTP ${response.status}`;
+      let message = `HTTP ${response.status}`;
+
+      if (typeof payload === "string") {
+        message = payload;
+      } else if (payload && typeof payload === "object") {
+        const rawMessage = payload.error ?? payload.message;
+        if (typeof rawMessage === "string") {
+          message = rawMessage;
+        } else if (rawMessage && typeof rawMessage === "object") {
+          message =
+            rawMessage.message || rawMessage.code || JSON.stringify(rawMessage);
+        } else {
+          message = JSON.stringify(payload);
+        }
+      }
+
       throw new Error(message);
     }
 

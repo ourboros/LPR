@@ -520,6 +520,7 @@ router.delete("/lesson/:id", async (req, res) => {
     }
 
     res.json({
+      success: true,
       message: "教案已刪除",
       lessonIds: targetLessonIds,
       cascade,
