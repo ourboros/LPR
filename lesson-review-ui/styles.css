@@ -117,6 +117,10 @@ body {
   width: 100%;
 }
 
+body:not(.auth-ui-ready) .nav-auth-block {
+  visibility: hidden;
+}
+
 .nav-auth-button .fa-google {
   background: linear-gradient(
     45deg,

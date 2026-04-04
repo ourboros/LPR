@@ -134,6 +134,10 @@ body {
   color: var(--color-action);
 }
 
+body:not(.auth-ui-ready) .upload-auth-inline {
+  visibility: hidden;
+}
+
 .upload-auth-inline__button {
   width: auto;
   min-width: 210px;

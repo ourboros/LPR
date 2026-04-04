@@ -75,6 +75,8 @@
     bindAuthButton();
     updateAuthUi();
 
+    document.body.classList.add("auth-ui-ready");
+
     window.addEventListener("lpr:auth:success", updateAuthUi);
     window.addEventListener("lpr:auth:logout", updateAuthUi);
   });
