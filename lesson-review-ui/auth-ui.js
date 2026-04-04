@@ -7,6 +7,16 @@
     return document.querySelector("[data-auth-user]");
   }
 
+  function setButtonLabel(button, labelText) {
+    const label = button.querySelector(".auth-button-label");
+    if (label) {
+      label.textContent = labelText;
+      return;
+    }
+
+    button.textContent = labelText;
+  }
+
   function updateAuthUi() {
     const button = getAuthButton();
     const userLabel = getAuthUserLabel();
@@ -19,7 +29,7 @@
     const user = window.LPRAuth.getUserInfo();
 
     if (isLoggedIn) {
-      button.textContent = "登出";
+      setButtonLabel(button, "登出");
       if (userLabel) {
         userLabel.textContent = user?.name
           ? `目前使用者：${user.name}`
@@ -28,7 +38,7 @@
       return;
     }
 
-    button.textContent = "Google 登入";
+    setButtonLabel(button, "Google 登入");
     if (userLabel) {
       userLabel.textContent = "目前未登入";
     }
@@ -42,7 +52,6 @@
 
     button.addEventListener("click", async () => {
       if (!window.LPRAuth) {
-        window.location.href = "/app/auth.html";
         return;
       }
 
@@ -51,7 +60,11 @@
         return;
       }
 
-      window.location.href = "/app/auth.html";
+      try {
+        await window.LPRAuth.startGoogleLogin();
+      } catch (error) {
+        console.error("啟動 Google 登入失敗:", error);
+      }
     });
   }
 

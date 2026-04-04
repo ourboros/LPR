@@ -297,7 +297,7 @@ function updateAuthUI() {
   } else {
     userName.textContent = "";
     authButton.textContent = "登入";
-    authButton.onclick = () => (window.location.href = "/app/auth.html");
+    authButton.onclick = () => window.LPRAuth.startGoogleLogin();
   }
 }
 

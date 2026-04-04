@@ -4,6 +4,7 @@
 
   const AUTH_STORAGE_KEY = "lprAuthToken";
   const AUTH_USER_KEY = "lprAuthUser";
+  let googleAuthReadyPromise = null;
 
   // ============================================
   // Token Management
@@ -52,21 +53,38 @@
   // ============================================
 
   async function initGoogleAuth() {
-    // 等待 Google Sign-In SDK 加載
-    return new Promise((resolve) => {
+    if (googleAuthReadyPromise) {
+      return googleAuthReadyPromise;
+    }
+
+    googleAuthReadyPromise = new Promise((resolve) => {
       function checkGoogleReady() {
         if (window.google?.accounts?.id) {
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleGoogleCallback,
+            auto_select: false,
           });
           resolve(true);
         } else {
           setTimeout(checkGoogleReady, 100);
         }
       }
+
       checkGoogleReady();
     });
+
+    return googleAuthReadyPromise;
+  }
+
+  async function startGoogleLogin() {
+    await initGoogleAuth();
+
+    if (!window.google?.accounts?.id) {
+      throw new Error("Google 登入元件尚未載入完成");
+    }
+
+    window.google.accounts.id.prompt();
   }
 
   async function handleGoogleCallback(response) {
@@ -86,12 +104,7 @@
           new CustomEvent("lpr:auth:success", { detail: result.user }),
         );
 
-        // 重定向到上傳頁面（如果在登入頁）
-        if (window.location.pathname.includes("auth.html")) {
-          setTimeout(() => {
-            window.location.href = "/app/upload.html";
-          }, 500);
-        }
+        // 由目前頁面直接更新登入狀態，不再跳轉到其他頁面
       }
     } catch (error) {
       console.error("Google 登入失敗:", error);
@@ -175,10 +188,7 @@
       clearAuthToken();
       window.dispatchEvent(new CustomEvent("lpr:auth:logout"));
 
-      // 重定向到登入頁
-      if (!window.location.pathname.includes("auth.html")) {
-        window.location.href = "/app/auth.html";
-      }
+      // 保持在目前頁面，由 UI 即時反映登入狀態
     }
   }
 
@@ -225,6 +235,7 @@
 
   window.LPRAuth = {
     initGoogleAuth,
+    startGoogleLogin,
     handleGoogleCallback,
     getAuthToken,
     setAuthToken,
