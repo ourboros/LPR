@@ -55,6 +55,11 @@ const reviewRecordSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    userId: {
+      type: String,
+      default: null,
+      index: true,
+    },
   },
   {
     versionKey: false,
@@ -63,5 +68,7 @@ const reviewRecordSchema = new mongoose.Schema(
 
 reviewRecordSchema.index({ lessonId: 1, createdAt: -1 });
 reviewRecordSchema.index({ contentHash: 1, createdAt: -1 });
+reviewRecordSchema.index({ userId: 1, createdAt: -1 });
+reviewRecordSchema.index({ sessionId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("ReviewRecord", reviewRecordSchema);

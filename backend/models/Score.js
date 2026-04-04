@@ -39,6 +39,16 @@ const scoreSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    userId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    sessionId: {
+      type: String,
+      default: null,
+      index: true,
+    },
   },
   {
     versionKey: false,
@@ -46,5 +56,7 @@ const scoreSchema = new mongoose.Schema(
 );
 
 scoreSchema.index({ lessonId: 1, createdAt: -1 });
+scoreSchema.index({ userId: 1, createdAt: -1 });
+scoreSchema.index({ sessionId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Score", scoreSchema);

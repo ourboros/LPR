@@ -34,12 +34,14 @@ function createApp() {
     next();
   });
 
+  const authRoutes = require("./routes/auth");
   const chatRoutes = require("./routes/chat");
   const uploadRoutes = require("./routes/upload");
   const scoreRoutes = require("./routes/scores");
   const generateRoutes = require("./routes/generate");
   const reviewRoutes = require("./routes/reviews");
 
+  app.use("/api/auth", authRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/upload", uploadRoutes);
   app.use("/api/scores", scoreRoutes);

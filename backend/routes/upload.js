@@ -4,6 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { verifyTokenMiddleware } = require("../middleware/auth");
 const multer = require("multer");
 const fileParser = require("../services/fileParser");
 const Lesson = require("../models/Lesson");
@@ -139,7 +140,7 @@ const upload = multer({
  * POST /api/upload
  * 上傳單一教案檔案
  */
-router.post("/", upload.single("file"), async (req, res) => {
+router.post("/", verifyTokenMiddleware({ allowGuest: true }), upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "請提供檔案" });
@@ -182,6 +183,8 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     // 建立教案記錄
     const lessonId = generateNumericId();
+    const sessionId = req.user ? null : generateGuestSessionId();
+    
     const lesson = await Lesson.create({
       lessonId,
       name: decodedName,
@@ -195,6 +198,8 @@ router.post("/", upload.single("file"), async (req, res) => {
       uploadDate: new Date(),
       content: extractedText,
       selected: false,
+      userId: req.user?.id || null,
+      sessionId: sessionId,
     });
 
     const matchedLessonIds = matchedLessons.map((item) => item.lessonId);
@@ -239,12 +244,17 @@ router.post("/", upload.single("file"), async (req, res) => {
   }
 });
 
-/**
- * POST /api/upload/multiple
- * 上傳多個教案檔案
- */
-router.post("/multiple", upload.array("files", 10), async (req, res) => {
-  try {
+    const { verifyTokenMiddleware } = require("../middleware/auth");
+    const {
+      normalizeLessonName,
+      buildContentHash,
+      buildSourceSignature,
+      findDuplicateLessons,
+    } = require("../services/lessonMatcher");
+
+    function generateGuestSessionId() {
+      return `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: "請提供至少一個檔案" });
     }
