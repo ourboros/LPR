@@ -7,6 +7,8 @@ const deleteHistoryBtn = document.getElementById("deleteHistoryBtn");
 const deletePreviewBox = document.getElementById("deletePreviewBox");
 const deletePreviewSummary = document.getElementById("deletePreviewSummary");
 
+let verifiedLessonId = "";
+
 function applySidebarState() {
   if (!pageShell) {
     return;
@@ -30,21 +32,36 @@ function persistSidebarState() {
 
 async function loadLesson() {
   const lessonId = window.LPR.getCurrentLessonId();
+  const numericLessonId = Number(lessonId);
 
-  if (!lessonId) {
+  if (!lessonId || !Number.isFinite(numericLessonId)) {
+    verifiedLessonId = "";
+    window.LPR.clearCurrentLesson();
     lessonFileName.textContent = "尚未選擇教案";
     lessonUploadDate.textContent = "未提供";
-    lessonText.innerHTML = "<p>尚未選擇教案。請先回到上傳頁面上傳教案。</p>";
+    lessonText.innerHTML =
+      "<p>目前教案狀態已失效，請先回到上傳頁面重新選擇教案。</p>";
     return;
   }
 
   try {
     const lesson = await window.LPR.request(`/upload/lesson/${lessonId}`);
+    verifiedLessonId = String(lesson.id || lesson.lessonId || lessonId);
+
+    window.LPR.setCurrentLesson({
+      id: verifiedLessonId,
+      name: lesson.name || "未命名教案",
+    });
 
     lessonFileName.textContent = lesson.name || "未命名教案";
     lessonUploadDate.textContent = window.LPR.formatDate(lesson.uploadDate);
     lessonText.textContent = lesson.content || "此教案沒有可顯示的內容。";
   } catch (error) {
+    verifiedLessonId = "";
+    if (/404|400|找不到|無效/.test(String(error?.message || ""))) {
+      window.LPR.clearCurrentLesson();
+    }
+
     lessonFileName.textContent = "載入失敗";
     lessonUploadDate.textContent = "未提供";
     lessonText.innerHTML = `<p>載入教案內容失敗：${error.message}</p>`;
@@ -52,7 +69,7 @@ async function loadLesson() {
 }
 
 async function deleteLessonWithHistory() {
-  const lessonId = window.LPR.getCurrentLessonId();
+  const lessonId = verifiedLessonId || window.LPR.getCurrentLessonId();
   const numericLessonId = Number(lessonId);
 
   if (!lessonId || !Number.isFinite(numericLessonId)) {

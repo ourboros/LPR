@@ -148,19 +148,7 @@ function showDuplicateModal(result) {
 }
 
 function getReusableLessonFromDuplicateResult(result) {
-  const lessons = Array.isArray(result?.matchedLessons)
-    ? result.matchedLessons
-    : [];
-
-  if (lessons.length === 0) {
-    return null;
-  }
-
-  const preferredLesson = lessons[0];
-  const candidateId =
-    preferredLesson.id ||
-    preferredLesson.lessonId ||
-    preferredLesson.canonicalLessonId;
+  const candidateId = result?.targetLessonId;
 
   if (!Number.isFinite(Number(candidateId))) {
     return null;
@@ -168,7 +156,7 @@ function getReusableLessonFromDuplicateResult(result) {
 
   return {
     id: candidateId,
-    name: preferredLesson.name || "未命名教案",
+    name: result?.targetLessonName || "未命名教案",
   };
 }
 
@@ -176,25 +164,6 @@ async function resolveDuplicate(action) {
   if (!pendingUploadResult) {
     hideDuplicateModal();
     setStatus("未找到待處理的重複教案資料，請重新上傳。", "error");
-    return;
-  }
-
-  if (action === "reuse-history") {
-    const reusableLesson =
-      getReusableLessonFromDuplicateResult(pendingUploadResult);
-
-    if (!reusableLesson) {
-      hideDuplicateModal();
-      setStatus("找不到可重用的舊教案資料，請重新上傳。", "error");
-      return;
-    }
-
-    hideDuplicateModal();
-    sessionStorage.setItem("historyAction", "reused");
-    finalizeUploadAndRedirect(
-      reusableLesson,
-      "✓ 已載入先前資料，正在進入系統...",
-    );
     return;
   }
 
@@ -210,6 +179,11 @@ async function resolveDuplicate(action) {
       },
     });
 
+    const targetLesson = getReusableLessonFromDuplicateResult(data);
+    if (!targetLesson || data?.targetFound === false) {
+      throw new Error(data?.message || "找不到可使用的教案資料，請重新上傳。");
+    }
+
     hideDuplicateModal();
 
     const message =
@@ -217,10 +191,12 @@ async function resolveDuplicate(action) {
         ? "✓ 已清除先前資料，正在進入系統..."
         : "✓ 已載入先前資料，正在進入系統...";
 
-    finalizeUploadAndRedirect(pendingUploadResult, `${message}`);
+    finalizeUploadAndRedirect(targetLesson, `${message}`);
 
     if (data?.action === "clear-history") {
       sessionStorage.setItem("historyAction", "cleared");
+    } else {
+      sessionStorage.setItem("historyAction", "reused");
     }
   } catch (error) {
     setStatus(`❌ 重複資料處理失敗：${error.message}`, "error");

@@ -88,6 +88,27 @@ async function buildHistorySummary(lessonIds = []) {
   };
 }
 
+async function findTargetLessonForReuse(currentLessonId, groupLessonIds = []) {
+  if (!Array.isArray(groupLessonIds) || groupLessonIds.length === 0) {
+    return null;
+  }
+
+  const previousLessonIds = groupLessonIds.filter(
+    (id) => id !== currentLessonId,
+  );
+
+  if (previousLessonIds.length === 0) {
+    return null;
+  }
+
+  return Lesson.findOne(
+    { lessonId: { $in: previousLessonIds } },
+    { _id: 0, lessonId: 1, name: 1, canonicalLessonId: 1, uploadDate: 1 },
+  )
+    .sort({ uploadDate: -1 })
+    .lean();
+}
+
 const fileFilter = (req, file, cb) => {
   const allowedTypes = [
     "application/pdf",
@@ -405,11 +426,35 @@ router.post("/resolve-duplicate", async (req, res) => {
     const allGroupLessonIds = await resolveHistoryLessonIds(lesson);
     const previousLessonIds = allGroupLessonIds.filter((id) => id !== lessonId);
 
+    let targetLesson = null;
+
+    if (action === "reuse-history") {
+      targetLesson = await findTargetLessonForReuse(
+        lessonId,
+        allGroupLessonIds,
+      );
+
+      if (!targetLesson) {
+        return res.status(409).json({
+          success: false,
+          error: "找不到可用的歷史教案",
+          message: "目前沒有可重用的歷史教案，請改用新上傳教案或重新上傳。",
+          targetFound: false,
+        });
+      }
+    }
+
     if (action === "clear-history" && previousLessonIds.length > 0) {
       await Promise.all([
         Score.deleteMany({ lessonId: { $in: previousLessonIds } }),
         ReviewRecord.deleteMany({ lessonId: { $in: previousLessonIds } }),
       ]);
+
+      targetLesson = lesson;
+    }
+
+    if (action === "clear-history" && !targetLesson) {
+      targetLesson = lesson;
     }
 
     const historySummary = await buildHistorySummary(allGroupLessonIds);
@@ -420,6 +465,11 @@ router.post("/resolve-duplicate", async (req, res) => {
       lessonId,
       canonicalLessonId: lesson.canonicalLessonId || lesson.lessonId,
       historySummary,
+      targetFound: Boolean(targetLesson),
+      targetLessonId: targetLesson?.lessonId || null,
+      targetLessonName: targetLesson?.name || null,
+      targetCanonicalLessonId:
+        targetLesson?.canonicalLessonId || targetLesson?.lessonId || null,
       affectedLessonIds: action === "clear-history" ? previousLessonIds : [],
       message:
         action === "clear-history"
