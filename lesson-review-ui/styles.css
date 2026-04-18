@@ -538,7 +538,7 @@ body:not(.auth-ui-ready) .nav-auth-block {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 0 8px 0 6px;
   min-height: 0;
 }
 
@@ -560,13 +560,15 @@ body:not(.auth-ui-ready) .nav-auth-block {
 }
 
 .review-bubble {
-  background: var(--color-soft);
+  align-self: flex-start;
+  max-width: 80%;
+  background: #edf2ff;
   color: var(--color-deep);
   border-radius: 20px;
   padding: 14px 18px;
   line-height: 1.6;
   font-size: 1rem;
-  border: 2px solid transparent;
+  border: 2px solid #c7d3ef;
   min-height: auto;
   height: auto;
   white-space: pre-wrap;
@@ -574,11 +576,12 @@ body:not(.auth-ui-ready) .nav-auth-block {
 
 .user-message {
   align-self: flex-end;
-  background: var(--color-soft);
+  background: #dbe8ff;
   color: var(--color-deep);
   border-radius: 20px;
   padding: 10px 14px;
   max-width: 70%;
+  border: 1px solid #bfd0f5;
   font-size: 0.95rem;
   line-height: 1.5;
 }
