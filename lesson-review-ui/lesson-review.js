@@ -24,6 +24,7 @@ let selectedOriginalText = "";
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
 let isGenerating = false;
+let lastLoadedLessonId = null;
 
 function setGenerationState(generating, options = {}) {
   const { showRegenerate = false } = options;
