@@ -470,6 +470,25 @@ commentEditorApply.addEventListener("click", async () => {
     }
     activeSelectionRange.insertNode(fragment);
 
+    // ✅ 同步更新 reviewHistory 中的評論內容
+    // 尋找包含原始文字的 assistant 記錄
+    const historyIndex = reviewHistory.findIndex(
+      (item) =>
+        item.role === "assistant" &&
+        item.content.includes(selectedOriginalText),
+    );
+
+    if (historyIndex >= 0) {
+      // 找到對應的舊評論，直接替換
+      reviewHistory[historyIndex].content = modifiedComment;
+    } else {
+      // 若找不到（不應發生），作為新項追加
+      console.warn(
+        "未找到對應的評論記錄，作為新項追加到歷史紀錄",
+      );
+      reviewHistory.push({ role: "assistant", content: modifiedComment });
+    }
+
     // 清除選取
     window.getSelection()?.removeAllRanges();
 
