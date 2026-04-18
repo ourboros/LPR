@@ -143,6 +143,19 @@ async function loadAndInjectFormalReviewHistory() {
     return false;
   }
 
+  // 檢查 lessonId 是否變化，若變化則清空舊資料
+  if (lastLoadedLessonId && lastLoadedLessonId !== lessonId) {
+    reviewResult.innerHTML = "";
+    reviewHistory = [];
+    currentSessionId = "";
+    sessionStorage.removeItem(REVIEW_SESSION_KEY);
+  }
+
+  // 檢查 DOM 是否已有內容，若有則不重複加載（同一個教案）
+  if (reviewResult.children.length > 0) {
+    return reviewHistory.length > 0;
+  }
+
   try {
     const data = await window.LPR.request(`/reviews/history/${lessonId}`);
     const records = (data.reviews || []).filter(
@@ -170,6 +183,10 @@ async function loadAndInjectFormalReviewHistory() {
     });
 
     createReviewBubble("已載入先前正式評論，可直接繼續調整。");
+    
+    // 記錄已加載的 lessonId
+    lastLoadedLessonId = lessonId;
+    
     return reviewHistory.length > 0;
   } catch (error) {
     console.error("載入歷史正式評論失敗:", error);
