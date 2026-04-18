@@ -99,7 +99,10 @@ async function requestReview(message, options = {}) {
     return;
   }
 
-  if (showUserMessage) {
+  // ✅ 修改：只在第一次生成時顯示用戶消息氣泡
+  // 後續對話（已有 reviewHistory）不顯示用戶消息，避免對話混亂
+  const isFirstGeneration = reviewHistory.length === 0;
+  if (showUserMessage && isFirstGeneration) {
     createUserBubble(message);
   }
 
