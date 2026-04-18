@@ -96,7 +96,7 @@ router.post("/", async (req, res) => {
     history.push(response);
     sessions.set(sid, history);
 
-    await persistReviewRecord({
+    const savedReview = await persistReviewRecord({
       lessonId: safeSelectedSources[0] || null,
       sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
@@ -111,6 +111,7 @@ router.post("/", async (req, res) => {
     res.json({
       ...response,
       sessionId: sid,
+      reviewId: savedReview?.reviewId || null,
     });
   } catch (error) {
     handleAiRouteError(res, "處理對話時發生錯誤", error);
@@ -351,7 +352,7 @@ router.get("/criteria", (req, res) => {
  */
 router.post("/modify-comment", async (req, res) => {
   try {
-    const { originalComment, instruction, lessonId } = req.body;
+    const { originalComment, instruction, lessonId, reviewId } = req.body;
 
     // 驗證輸入
     if (!originalComment || typeof originalComment !== "string") {
@@ -363,6 +364,27 @@ router.post("/modify-comment", async (req, res) => {
     if (!instruction || typeof instruction !== "string") {
       return res.status(400).json({
         error: "請提供修改指示",
+      });
+    }
+
+    const normalizedReviewId = normalizeReviewId(reviewId);
+    if (!normalizedReviewId) {
+      return res.status(400).json({
+        error: "請提供有效的評論編號",
+      });
+    }
+
+    const normalizedLessonId = normalizeLessonId(lessonId);
+    const targetReview = await ReviewRecord.findOne({
+      ...buildLessonScopeFilter(req),
+      reviewId: normalizedReviewId,
+      lessonId: normalizedLessonId,
+      deletedAt: null,
+    }).lean();
+
+    if (!targetReview) {
+      return res.status(404).json({
+        error: "找不到要修改的評論紀錄",
       });
     }
 
@@ -389,20 +411,27 @@ ${instruction}
     const geminiClient = require("../services/geminiClient");
     const modifiedComment = await geminiClient.generateResponse(prompt);
 
-    await persistReviewRecord({
-      lessonId: normalizeLessonId(lessonId),
-      sessionId: req.user ? null : req.sessionId || null,
-      userId: req.user?.id || null,
-      mode: "review-formal",
-      action: "modify",
-      userPrompt: instruction,
-      aiContent: modifiedComment.trim(),
-      sources: [],
-    });
+    await ReviewRecord.updateOne(
+      {
+        ...buildLessonScopeFilter(req),
+        reviewId: normalizedReviewId,
+        lessonId: normalizedLessonId,
+        deletedAt: null,
+      },
+      {
+        $set: {
+          aiContent: modifiedComment.trim(),
+          userPrompt: "",
+          action: "modify",
+          sources: [],
+        },
+      },
+    );
 
     res.json({
       success: true,
       modifiedComment: modifiedComment.trim(),
+      reviewId: normalizedReviewId,
     });
   } catch (error) {
     handleAiRouteError(res, "修改評論時發生錯誤", error);
@@ -533,7 +562,7 @@ async function persistReviewRecord(payload = {}) {
   try {
     const lessonId = normalizeLessonId(payload.lessonId);
     if (!lessonId || !payload.aiContent) {
-      return;
+      return null;
     }
 
     const lesson = await findLessonById(lessonId, {
@@ -545,7 +574,7 @@ async function persistReviewRecord(payload = {}) {
     }
 
     const reviewId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
-    await ReviewRecord.create({
+    return await ReviewRecord.create({
       reviewId,
       lessonId,
       contentHash: lesson.contentHash || "",
@@ -562,7 +591,17 @@ async function persistReviewRecord(payload = {}) {
     });
   } catch (error) {
     console.warn("儲存評論紀錄失敗，略過不影響主流程:", error.message);
+    return null;
   }
+}
+
+function normalizeReviewId(rawReviewId) {
+  const reviewId = Number.parseInt(rawReviewId, 10);
+  if (!Number.isFinite(reviewId)) {
+    return null;
+  }
+
+  return reviewId;
 }
 
 module.exports = router;

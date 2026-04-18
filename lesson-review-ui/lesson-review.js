@@ -21,6 +21,8 @@ const REGENERATE_REVIEW_PROMPT =
 
 let activeSelectionRange = null;
 let selectedOriginalText = "";
+let selectedReviewId = null;
+let selectedReviewBubble = null;
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
 let isGenerating = false;
@@ -61,9 +63,12 @@ function renderReviewContent(bubble, text) {
   bubble.textContent = String(text || "").trim() || "AI 未回傳評論內容。";
 }
 
-function createReviewBubble(content) {
+function createReviewBubble(content, reviewId = null) {
   const bubble = document.createElement("article");
   bubble.className = "review-bubble";
+  if (reviewId !== null && reviewId !== undefined) {
+    bubble.dataset.reviewId = String(reviewId);
+  }
   renderReviewContent(bubble, content);
   reviewResult.appendChild(bubble);
   reviewResult.scrollTop = reviewResult.scrollHeight;
@@ -128,10 +133,11 @@ async function requestReview(message, options = {}) {
       sessionStorage.setItem(REVIEW_SESSION_KEY, currentSessionId);
     }
 
-    createReviewBubble(data.content || "AI 未回傳評論內容。");
+    const savedReviewId = data.reviewId || null;
+    createReviewBubble(data.content || "AI 未回傳評論內容。", savedReviewId);
 
-    reviewHistory.push({ role: "user", content: message });
-    reviewHistory.push({ role: "assistant", content: data.content || "" });
+    reviewHistory.push({ role: "user", content: message, reviewId: savedReviewId });
+    reviewHistory.push({ role: "assistant", content: data.content || "", reviewId: savedReviewId });
   } catch (error) {
     createReviewBubble(`生成評論失敗：${error.message}`);
   } finally {
@@ -176,20 +182,20 @@ async function loadAndInjectFormalReviewHistory() {
 
       if (prompt) {
         createUserBubble(prompt);
-        reviewHistory.push({ role: "user", content: prompt });
+        reviewHistory.push({ role: "user", content: prompt, reviewId: item.reviewId });
       }
 
       if (content) {
-        createReviewBubble(content);
-        reviewHistory.push({ role: "assistant", content });
+        createReviewBubble(content, item.reviewId);
+        reviewHistory.push({ role: "assistant", content, reviewId: item.reviewId });
       }
     });
 
     createReviewBubble("已載入先前正式評論，可直接繼續調整。");
-    
+
     // 記錄已加載的 lessonId
     lastLoadedLessonId = lessonId;
-    
+
     return reviewHistory.length > 0;
   } catch (error) {
     console.error("載入歷史正式評論失敗:", error);
@@ -204,6 +210,8 @@ function hideCommentEditor() {
   commentEditor.hidden = true;
   activeSelectionRange = null;
   selectedOriginalText = "";
+  selectedReviewId = null;
+  selectedReviewBubble = null;
 }
 
 function isSelectionInsideAiReview(range) {
@@ -276,6 +284,15 @@ function handleReviewSelection() {
   // 儲存選取範圍和原始文字
   activeSelectionRange = selectedRange.cloneRange();
   selectedOriginalText = text;
+
+  const anchorNode = selectedRange.commonAncestorContainer;
+  const anchorElement =
+    anchorNode.nodeType === Node.ELEMENT_NODE
+      ? anchorNode
+      : anchorNode.parentElement;
+  const reviewBubble = anchorElement?.closest(".review-bubble");
+  selectedReviewBubble = reviewBubble;
+  selectedReviewId = reviewBubble?.dataset.reviewId || null;
 
   // 顯示原始文字在編輯器中
   if (originalTextDisplay) {
@@ -387,6 +404,7 @@ async function modifyCommentWithAI(originalComment, instruction) {
       originalComment,
       instruction,
       lessonId: lessonId ? parseFloat(lessonId) : undefined,
+      reviewId: selectedReviewId ? parseInt(selectedReviewId, 10) : undefined,
     },
   });
 
@@ -448,6 +466,11 @@ commentEditorApply.addEventListener("click", async () => {
     return;
   }
 
+  if (!selectedReviewBubble || !selectedReviewId) {
+    showEditorError("找不到對應的評論紀錄，請重新選取後再試一次");
+    return;
+  }
+
   // 設定 Loading 狀態
   setButtonLoading(commentEditorApply, true);
   commentEditorCancel.disabled = true;
@@ -459,38 +482,35 @@ commentEditorApply.addEventListener("click", async () => {
       instruction,
     );
 
-    // 替換原始文字 (使用 Markdown 渲染)
-    activeSelectionRange.deleteContents();
+    renderReviewContent(selectedReviewBubble, modifiedComment);
 
-    // 建立臨時容器進行 Markdown 渲染
-    const tempContainer = document.createElement("div");
-    window.LPRMarkdown.renderToContainer(tempContainer, modifiedComment);
-
-    // 使用 DocumentFragment 保留節點順序
-    const fragment = document.createDocumentFragment();
-    while (tempContainer.firstChild) {
-      fragment.appendChild(tempContainer.firstChild);
+    const previousBubble = selectedReviewBubble.previousElementSibling;
+    if (previousBubble?.classList.contains("user-message")) {
+      previousBubble.remove();
     }
-    activeSelectionRange.insertNode(fragment);
 
-    // ✅ 同步更新 reviewHistory 中的評論內容
-    // 尋找包含原始文字的 assistant 記錄
+    reviewHistory = reviewHistory.filter(
+      (item) =>
+        !(String(item.reviewId) === String(selectedReviewId) && item.role === "user"),
+    );
+
     const historyIndex = reviewHistory.findIndex(
       (item) =>
-        item.role === "assistant" &&
-        item.content.includes(selectedOriginalText),
+        String(item.reviewId) === String(selectedReviewId) &&
+        item.role === "assistant",
     );
 
     if (historyIndex >= 0) {
-      // 找到對應的舊評論，直接替換
       reviewHistory[historyIndex].content = modifiedComment;
     } else {
-      // 若找不到（不應發生），作為新項追加
-      console.warn(
-        "未找到對應的評論記錄，作為新項追加到歷史紀錄",
-      );
-      reviewHistory.push({ role: "assistant", content: modifiedComment });
+      reviewHistory.push({
+        role: "assistant",
+        content: modifiedComment,
+        reviewId: selectedReviewId,
+      });
     }
+
+    reviewResult.scrollTop = reviewResult.scrollHeight;
 
     // 清除選取
     window.getSelection()?.removeAllRanges();
