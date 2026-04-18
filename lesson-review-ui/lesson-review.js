@@ -2,6 +2,7 @@ const reviewResult = document.getElementById("reviewResult");
 const regenerateBtn = document.getElementById("regenerateBtn");
 const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("sendBtn");
 const menuBtn = document.querySelector(".menu-btn");
 const pageShell = document.querySelector(".page-shell");
 const commentEditor = document.getElementById("commentEditor");
@@ -22,6 +23,30 @@ let activeSelectionRange = null;
 let selectedOriginalText = "";
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
+let isGenerating = false;
+
+function setGenerationState(generating, options = {}) {
+  const { showRegenerate = false } = options;
+  isGenerating = generating;
+
+  if (chatInput) {
+    chatInput.disabled = generating;
+  }
+
+  if (sendBtn) {
+    sendBtn.disabled = generating;
+  }
+
+  if (!regenerateBtn) {
+    return;
+  }
+
+  if (showRegenerate) {
+    regenerateBtn.hidden = false;
+  }
+
+  regenerateBtn.disabled = generating || regenerateBtn.hidden;
+}
 
 function renderReviewContent(bubble, text) {
   if (window.LPRMarkdown?.renderToContainer) {
@@ -57,6 +82,10 @@ async function requestReview(message, options = {}) {
   const { clearExisting = false, showUserMessage = false } = options;
   const lessonId = window.LPR?.getCurrentLessonId();
 
+  if (isGenerating) {
+    return;
+  }
+
   if (clearExisting) {
     reviewResult.innerHTML = "";
     reviewHistory = [];
@@ -73,6 +102,7 @@ async function requestReview(message, options = {}) {
     createUserBubble(message);
   }
 
+  setGenerationState(true);
   const loadingBubble = createReviewBubble("AI 正在生成評論...");
 
   try {
@@ -94,14 +124,15 @@ async function requestReview(message, options = {}) {
       sessionStorage.setItem(REVIEW_SESSION_KEY, currentSessionId);
     }
 
-    loadingBubble.remove();
     createReviewBubble(data.content || "AI 未回傳評論內容。");
 
     reviewHistory.push({ role: "user", content: message });
     reviewHistory.push({ role: "assistant", content: data.content || "" });
   } catch (error) {
-    loadingBubble.remove();
     createReviewBubble(`生成評論失敗：${error.message}`);
+  } finally {
+    loadingBubble.remove();
+    setGenerationState(false, { showRegenerate: true });
   }
 }
 
@@ -258,6 +289,12 @@ function persistSidebarState() {
 }
 
 applySidebarState();
+setGenerationState(false);
+
+if (regenerateBtn) {
+  regenerateBtn.hidden = true;
+  regenerateBtn.disabled = true;
+}
 
 // 折疊側邊欄功能
 menuBtn.addEventListener("click", () => {
@@ -270,7 +307,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   const hasHistory = await loadAndInjectFormalReviewHistory();
   if (!hasHistory) {
     await requestReview(INITIAL_REVIEW_PROMPT, { clearExisting: true });
+    return;
   }
+
+  setGenerationState(false, { showRegenerate: true });
 });
 
 // 重新生成評論按鈕

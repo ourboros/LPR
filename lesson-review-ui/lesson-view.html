@@ -65,13 +65,23 @@
               <i class="fa-solid fa-file-pdf"></i>
               教案內容預覽
             </h2>
-            <button
-              class="action-btn"
-              onclick="window.location.href = './upload.html'"
-            >
-              <i class="fa-solid fa-arrow-up-from-bracket"></i>
-              重新上傳
-            </button>
+            <div class="lesson-view-controls">
+              <button
+                class="action-btn"
+                onclick="window.location.href = './upload.html'"
+              >
+                <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                重新上傳
+              </button>
+              <button
+                id="deleteHistoryBtn"
+                class="action-btn action-btn--danger"
+                type="button"
+              >
+                <i class="fa-solid fa-trash"></i>
+                刪除教案與評論紀錄
+              </button>
+            </div>
           </div>
 
           <div id="lessonContent" class="lesson-preview-content">
@@ -109,10 +119,6 @@
             >
               <i class="fa-solid fa-rotate-left"></i>
               返回上傳頁面
-            </button>
-            <button id="deleteHistoryBtn" class="secondary-btn" type="button">
-              <i class="fa-solid fa-trash"></i>
-              刪除教案與評論紀錄
             </button>
           </div>
 

@@ -782,6 +782,14 @@ body:not(.auth-ui-ready) .nav-auth-block {
   color: var(--color-deep);
 }
 
+.lesson-view-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .action-btn {
   border: 0;
   border-radius: 12px;
@@ -801,6 +809,17 @@ body:not(.auth-ui-ready) .nav-auth-block {
 .action-btn:hover {
   background: var(--color-action);
   color: var(--color-bg);
+}
+
+.action-btn--danger {
+  background: #ffe3e3;
+  color: #8b1e1e;
+  border: 1px solid #f2b8b8;
+}
+
+.action-btn--danger:hover {
+  background: #c62828;
+  color: #ffffff;
 }
 
 .lesson-preview-content {
@@ -1204,6 +1223,11 @@ body:not(.auth-ui-ready) .nav-auth-block {
 
   .lesson-view-header {
     align-items: center;
+  }
+
+  .lesson-view-controls {
+    width: 100%;
+    flex-direction: column;
   }
 
   .action-btn {
