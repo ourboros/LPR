@@ -136,8 +136,16 @@ async function requestReview(message, options = {}) {
     const savedReviewId = data.reviewId || null;
     createReviewBubble(data.content || "AI 未回傳評論內容。", savedReviewId);
 
-    reviewHistory.push({ role: "user", content: message, reviewId: savedReviewId });
-    reviewHistory.push({ role: "assistant", content: data.content || "", reviewId: savedReviewId });
+    reviewHistory.push({
+      role: "user",
+      content: message,
+      reviewId: savedReviewId,
+    });
+    reviewHistory.push({
+      role: "assistant",
+      content: data.content || "",
+      reviewId: savedReviewId,
+    });
   } catch (error) {
     createReviewBubble(`生成評論失敗：${error.message}`);
   } finally {
@@ -182,12 +190,20 @@ async function loadAndInjectFormalReviewHistory() {
 
       if (prompt) {
         createUserBubble(prompt);
-        reviewHistory.push({ role: "user", content: prompt, reviewId: item.reviewId });
+        reviewHistory.push({
+          role: "user",
+          content: prompt,
+          reviewId: item.reviewId,
+        });
       }
 
       if (content) {
         createReviewBubble(content, item.reviewId);
-        reviewHistory.push({ role: "assistant", content, reviewId: item.reviewId });
+        reviewHistory.push({
+          role: "assistant",
+          content,
+          reviewId: item.reviewId,
+        });
       }
     });
 
@@ -491,7 +507,10 @@ commentEditorApply.addEventListener("click", async () => {
 
     reviewHistory = reviewHistory.filter(
       (item) =>
-        !(String(item.reviewId) === String(selectedReviewId) && item.role === "user"),
+        !(
+          String(item.reviewId) === String(selectedReviewId) &&
+          item.role === "user"
+        ),
     );
 
     const historyIndex = reviewHistory.findIndex(
