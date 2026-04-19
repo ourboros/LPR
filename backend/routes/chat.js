@@ -358,6 +358,9 @@ router.post("/modify-comment", async (req, res) => {
       selectedText,
       selectionStart,
       selectionEnd,
+      plainContextBefore,
+      plainContextAfter,
+      plainSnapshot,
       instruction,
       lessonId,
       reviewId,
@@ -382,6 +385,9 @@ router.post("/modify-comment", async (req, res) => {
     ).trim();
     const normalizedSelectionStart = Number.parseInt(selectionStart, 10);
     const normalizedSelectionEnd = Number.parseInt(selectionEnd, 10);
+    const normalizedPlainContextBefore = String(plainContextBefore || "");
+    const normalizedPlainContextAfter = String(plainContextAfter || "");
+    const normalizedPlainSnapshot = String(plainSnapshot || "");
 
     if (!normalizedFullComment) {
       return res.status(400).json({
@@ -416,6 +422,15 @@ router.post("/modify-comment", async (req, res) => {
       });
     }
 
+    const plainPosition = locateSelectedSpanByAnchors(
+      normalizedPlainSnapshot,
+      normalizedSelectedText,
+      normalizedPlainContextBefore,
+      normalizedPlainContextAfter,
+      normalizedSelectionStart,
+      normalizedSelectionEnd,
+    );
+
     // 建構 AI 提示詞
     const prompt = `你是專業的教育教案評論修改助手。
 請根據以下資訊，對完整評論進行局部修正並輸出完整評論全文：
@@ -430,6 +445,16 @@ ${normalizedSelectedText}
 起始索引：${Number.isFinite(normalizedSelectionStart) ? normalizedSelectionStart : "未知"}
 結束索引：${Number.isFinite(normalizedSelectionEnd) ? normalizedSelectionEnd : "未知"}
 
+【選取段落前文錨點】
+${normalizedPlainContextBefore || "（無）"}
+
+【選取段落後文錨點】
+${normalizedPlainContextAfter || "（無）"}
+
+【伺服器推定純文字位置】
+起始索引：${Number.isFinite(plainPosition.start) ? plainPosition.start : "未知"}
+結束索引：${Number.isFinite(plainPosition.end) ? plainPosition.end : "未知"}
+
 【修改指示】
 ${instruction}
 
@@ -439,7 +464,8 @@ ${instruction}
 3. 必須輸出「完整評論全文」，不可只輸出局部段落
 4. 不限制輸出字數，以完整性、連貫性與可讀性優先
 5. 每個段落都必須完整收尾，最後一句不得中途截斷
-6. 不要加入任何前綴或說明文字（例如：修改後評論）
+6. 保留原有 Markdown 結構（標題、清單、粗體、引用、程式區塊）
+7. 不要加入任何前綴或說明文字（例如：修改後評論）
 
 請直接輸出最終完整評論全文：`;
 
@@ -672,6 +698,89 @@ function isLikelyFullComment(candidate, originalFullComment) {
   return candidateText.length >= minLength;
 }
 
+function locateSelectedSpanByAnchors(
+  plainSnapshot,
+  selectedText,
+  contextBefore,
+  contextAfter,
+  fallbackStart,
+  fallbackEnd,
+) {
+  const text = String(plainSnapshot || "");
+  const target = String(selectedText || "");
+  const before = String(contextBefore || "");
+  const after = String(contextAfter || "");
+
+  if (!text || !target) {
+    return {
+      start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
+      end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+    };
+  }
+
+  if (before || after) {
+    let cursor = 0;
+    while (cursor < text.length) {
+      const idx = text.indexOf(target, cursor);
+      if (idx < 0) {
+        break;
+      }
+
+      const beforeOk =
+        !before || text.slice(Math.max(0, idx - before.length), idx) === before;
+      const afterStart = idx + target.length;
+      const afterOk =
+        !after || text.slice(afterStart, afterStart + after.length) === after;
+
+      if (beforeOk && afterOk) {
+        return { start: idx, end: idx + target.length };
+      }
+
+      cursor = idx + Math.max(1, target.length);
+    }
+  }
+
+  const firstIdx = text.indexOf(target);
+  if (firstIdx >= 0 && text.indexOf(target, firstIdx + target.length) < 0) {
+    return { start: firstIdx, end: firstIdx + target.length };
+  }
+
+  return {
+    start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
+    end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+  };
+}
+
+function countMarkdownTokens(text) {
+  const normalized = String(text || "");
+  if (!normalized) {
+    return 0;
+  }
+
+  const patterns = [
+    /^\s{0,3}#{1,6}\s+/gm,
+    /^\s*[-*+]\s+/gm,
+    /\*\*[^*]+\*\*/g,
+    /^\s*>\s+/gm,
+    /```/g,
+    /`[^`]+`/g,
+  ];
+  return patterns.reduce(
+    (sum, regex) => sum + (normalized.match(regex) || []).length,
+    0,
+  );
+}
+
+function isMarkdownStructureUnexpectedlyDropped(original, candidate) {
+  const originalCount = countMarkdownTokens(original);
+  if (originalCount < 2) {
+    return false;
+  }
+
+  const candidateCount = countMarkdownTokens(candidate);
+  return candidateCount < Math.floor(originalCount * 0.35);
+}
+
 async function ensureFullAndCompleteComment({
   draftComment,
   fullComment,
@@ -680,20 +789,23 @@ async function ensureFullAndCompleteComment({
 }) {
   const firstPass = String(draftComment || "").trim();
   const firstPassValid =
-    isLikelyFullComment(firstPass, fullComment) && hasCompleteEnding(firstPass);
+    isLikelyFullComment(firstPass, fullComment) &&
+    hasCompleteEnding(firstPass) &&
+    !isMarkdownStructureUnexpectedlyDropped(fullComment, firstPass);
 
   if (firstPassValid) {
     return firstPass;
   }
 
-  const retryPrompt = `${prompt}\n\n【重要補充】\n上一版輸出可能過短或結尾不完整。\n請重新輸出「完整評論全文」，保持段落完整，最後一句必須完整收束，且不得只輸出局部修改片段。`;
+  const retryPrompt = `${prompt}\n\n【重要補充】\n上一版輸出可能過短、結尾不完整或遺失 Markdown 結構。\n請重新輸出「完整評論全文」，保留原有 Markdown 結構（例如標題、清單、粗體、引用、程式區塊），保持段落完整，最後一句必須完整收束，且不得只輸出局部修改片段。`;
 
   try {
     const retryComment = await geminiClient.generateResponse(retryPrompt);
     const secondPass = String(retryComment || "").trim();
     const secondPassValid =
       isLikelyFullComment(secondPass, fullComment) &&
-      hasCompleteEnding(secondPass);
+      hasCompleteEnding(secondPass) &&
+      !isMarkdownStructureUnexpectedlyDropped(fullComment, secondPass);
 
     if (secondPassValid) {
       return secondPass;

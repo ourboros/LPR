@@ -26,10 +26,14 @@ let selectedReviewBubble = null;
 let selectedFullComment = "";
 let selectedRangeStart = -1;
 let selectedRangeEnd = -1;
+let selectedPlainContextBefore = "";
+let selectedPlainContextAfter = "";
+let selectedPlainTextSnapshot = "";
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
 let isGenerating = false;
 let lastLoadedLessonId = null;
+const CONTEXT_WINDOW = 64;
 
 function getRangeOffsetsWithinElement(element, range) {
   if (!element || !range) {
@@ -47,6 +51,26 @@ function getRangeOffsetsWithinElement(element, range) {
   return {
     start: startRange.toString().length,
     end: endRange.toString().length,
+  };
+}
+
+function getSelectionContext(
+  plainText,
+  start,
+  end,
+  windowSize = CONTEXT_WINDOW,
+) {
+  const text = String(plainText || "");
+  if (start < 0 || end <= start || start > text.length) {
+    return { before: "", after: "" };
+  }
+
+  const before = text.slice(Math.max(0, start - windowSize), start);
+  const after = text.slice(end, Math.min(text.length, end + windowSize));
+
+  return {
+    before,
+    after,
   };
 }
 
@@ -91,6 +115,7 @@ function createReviewBubble(content, reviewId = null) {
   if (reviewId !== null && reviewId !== undefined) {
     bubble.dataset.reviewId = String(reviewId);
   }
+  bubble.dataset.rawMarkdown = String(content || "").trim();
   renderReviewContent(bubble, content);
   reviewResult.appendChild(bubble);
   reviewResult.scrollTop = reviewResult.scrollHeight;
@@ -252,6 +277,9 @@ function hideCommentEditor() {
   selectedFullComment = "";
   selectedRangeStart = -1;
   selectedRangeEnd = -1;
+  selectedPlainContextBefore = "";
+  selectedPlainContextAfter = "";
+  selectedPlainTextSnapshot = "";
 }
 
 function isSelectionInsideAiReview(range) {
@@ -334,12 +362,23 @@ function handleReviewSelection() {
   selectedReviewBubble = reviewBubble;
   selectedReviewId = reviewBubble?.dataset.reviewId || null;
 
-  const fullComment = String(reviewBubble?.textContent || "").trim();
+  const fullComment = String(reviewBubble?.dataset.rawMarkdown || "").trim();
   selectedFullComment = fullComment;
 
   const offsets = getRangeOffsetsWithinElement(reviewBubble, selectedRange);
   selectedRangeStart = offsets.start;
   selectedRangeEnd = offsets.end;
+
+  const plainSnapshot = String(reviewBubble?.textContent || "");
+  selectedPlainTextSnapshot = plainSnapshot;
+
+  const selectionContext = getSelectionContext(
+    plainSnapshot,
+    selectedRangeStart,
+    selectedRangeEnd,
+  );
+  selectedPlainContextBefore = selectionContext.before;
+  selectedPlainContextAfter = selectionContext.after;
 
   // 顯示原始文字在編輯器中
   if (originalTextDisplay) {
@@ -449,6 +488,9 @@ async function modifyCommentWithAI(payload) {
     selectedText,
     selectionStart,
     selectionEnd,
+    plainContextBefore,
+    plainContextAfter,
+    plainSnapshot,
     instruction,
   } = payload;
   const lessonId = window.LPR?.getCurrentLessonId();
@@ -460,6 +502,9 @@ async function modifyCommentWithAI(payload) {
       selectedText,
       selectionStart,
       selectionEnd,
+      plainContextBefore,
+      plainContextAfter,
+      plainSnapshot,
       instruction,
       lessonId: lessonId ? parseFloat(lessonId) : undefined,
       reviewId: selectedReviewId ? parseInt(selectedReviewId, 10) : undefined,
@@ -555,12 +600,16 @@ commentEditorApply.addEventListener("click", async () => {
       selectedText: selectedOriginalText,
       selectionStart: selectedRangeStart,
       selectionEnd: selectedRangeEnd,
+      plainContextBefore: selectedPlainContextBefore,
+      plainContextAfter: selectedPlainContextAfter,
+      plainSnapshot: selectedPlainTextSnapshot,
       instruction,
     });
 
     const fullComment = modifyResult.fullComment;
     const responseReviewId = String(modifyResult.reviewId || selectedReviewId);
 
+    selectedReviewBubble.dataset.rawMarkdown = fullComment;
     renderReviewContent(selectedReviewBubble, fullComment);
 
     const previousBubble = selectedReviewBubble.previousElementSibling;
