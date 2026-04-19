@@ -23,10 +23,32 @@ let activeSelectionRange = null;
 let selectedOriginalText = "";
 let selectedReviewId = null;
 let selectedReviewBubble = null;
+let selectedFullComment = "";
+let selectedRangeStart = -1;
+let selectedRangeEnd = -1;
 let reviewHistory = [];
 let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
 let isGenerating = false;
 let lastLoadedLessonId = null;
+
+function getRangeOffsetsWithinElement(element, range) {
+  if (!element || !range) {
+    return { start: -1, end: -1 };
+  }
+
+  const startRange = range.cloneRange();
+  startRange.selectNodeContents(element);
+  startRange.setEnd(range.startContainer, range.startOffset);
+
+  const endRange = range.cloneRange();
+  endRange.selectNodeContents(element);
+  endRange.setEnd(range.endContainer, range.endOffset);
+
+  return {
+    start: startRange.toString().length,
+    end: endRange.toString().length,
+  };
+}
 
 function setGenerationState(generating, options = {}) {
   const { showRegenerate = false } = options;
@@ -124,7 +146,6 @@ async function requestReview(message, options = {}) {
         sessionId: currentSessionId || undefined,
         mode: "review-formal",
         action: "review-formal",
-        maxChars: 1500,
       },
     });
 
@@ -228,6 +249,9 @@ function hideCommentEditor() {
   selectedOriginalText = "";
   selectedReviewId = null;
   selectedReviewBubble = null;
+  selectedFullComment = "";
+  selectedRangeStart = -1;
+  selectedRangeEnd = -1;
 }
 
 function isSelectionInsideAiReview(range) {
@@ -309,6 +333,13 @@ function handleReviewSelection() {
   const reviewBubble = anchorElement?.closest(".review-bubble");
   selectedReviewBubble = reviewBubble;
   selectedReviewId = reviewBubble?.dataset.reviewId || null;
+
+  const fullComment = String(reviewBubble?.textContent || "").trim();
+  selectedFullComment = fullComment;
+
+  const offsets = getRangeOffsetsWithinElement(reviewBubble, selectedRange);
+  selectedRangeStart = offsets.start;
+  selectedRangeEnd = offsets.end;
 
   // 顯示原始文字在編輯器中
   if (originalTextDisplay) {
@@ -412,23 +443,40 @@ commentEditorCancel.addEventListener("click", () => {
  * @param {string} instruction - 修改指示
  * @returns {Promise<string>} 修改後的評論
  */
-async function modifyCommentWithAI(originalComment, instruction) {
+async function modifyCommentWithAI(payload) {
+  const {
+    fullComment,
+    selectedText,
+    selectionStart,
+    selectionEnd,
+    instruction,
+  } = payload;
   const lessonId = window.LPR?.getCurrentLessonId();
   const data = await window.LPR.request("/chat/modify-comment", {
     method: "POST",
     body: {
-      originalComment,
+      originalComment: selectedText,
+      fullComment,
+      selectedText,
+      selectionStart,
+      selectionEnd,
       instruction,
       lessonId: lessonId ? parseFloat(lessonId) : undefined,
       reviewId: selectedReviewId ? parseInt(selectedReviewId, 10) : undefined,
     },
   });
 
-  if (!data.success || !data.modifiedComment) {
+  const nextFullComment = String(
+    data.fullComment || data.modifiedComment || "",
+  ).trim();
+  if (!data.success || !nextFullComment) {
     throw new Error("AI 回傳格式錯誤");
   }
 
-  return data.modifiedComment;
+  return {
+    fullComment: nextFullComment,
+    reviewId: data.reviewId || selectedReviewId,
+  };
 }
 
 /**
@@ -487,18 +535,33 @@ commentEditorApply.addEventListener("click", async () => {
     return;
   }
 
+  if (
+    !selectedFullComment ||
+    selectedRangeStart < 0 ||
+    selectedRangeEnd <= selectedRangeStart
+  ) {
+    showEditorError("無法取得完整評論與選取範圍，請重新選取後再試一次");
+    return;
+  }
+
   // 設定 Loading 狀態
   setButtonLoading(commentEditorApply, true);
   commentEditorCancel.disabled = true;
 
   try {
     // 呼叫 AI API
-    const modifiedComment = await modifyCommentWithAI(
-      selectedOriginalText,
+    const modifyResult = await modifyCommentWithAI({
+      fullComment: selectedFullComment,
+      selectedText: selectedOriginalText,
+      selectionStart: selectedRangeStart,
+      selectionEnd: selectedRangeEnd,
       instruction,
-    );
+    });
 
-    renderReviewContent(selectedReviewBubble, modifiedComment);
+    const fullComment = modifyResult.fullComment;
+    const responseReviewId = String(modifyResult.reviewId || selectedReviewId);
+
+    renderReviewContent(selectedReviewBubble, fullComment);
 
     const previousBubble = selectedReviewBubble.previousElementSibling;
     if (previousBubble?.classList.contains("user-message")) {
@@ -507,25 +570,21 @@ commentEditorApply.addEventListener("click", async () => {
 
     reviewHistory = reviewHistory.filter(
       (item) =>
-        !(
-          String(item.reviewId) === String(selectedReviewId) &&
-          item.role === "user"
-        ),
+        !(String(item.reviewId) === responseReviewId && item.role === "user"),
     );
 
     const historyIndex = reviewHistory.findIndex(
       (item) =>
-        String(item.reviewId) === String(selectedReviewId) &&
-        item.role === "assistant",
+        String(item.reviewId) === responseReviewId && item.role === "assistant",
     );
 
     if (historyIndex >= 0) {
-      reviewHistory[historyIndex].content = modifiedComment;
+      reviewHistory[historyIndex].content = fullComment;
     } else {
       reviewHistory.push({
         role: "assistant",
-        content: modifiedComment,
-        reviewId: selectedReviewId,
+        content: fullComment,
+        reviewId: responseReviewId,
       });
     }
 

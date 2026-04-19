@@ -57,8 +57,8 @@ class PromptService {
       maxOutputTokens = 700;
       includeCriteria = true;
     } else if (mode === "review-formal") {
-      maxChars = 1500;
-      maxOutputTokens = 2600;
+      maxChars = undefined;
+      maxOutputTokens = 4096;
       includeCriteria = true;
     }
 

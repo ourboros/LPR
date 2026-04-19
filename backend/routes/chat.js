@@ -352,7 +352,16 @@ router.get("/criteria", (req, res) => {
  */
 router.post("/modify-comment", async (req, res) => {
   try {
-    const { originalComment, instruction, lessonId, reviewId } = req.body;
+    const {
+      originalComment,
+      fullComment,
+      selectedText,
+      selectionStart,
+      selectionEnd,
+      instruction,
+      lessonId,
+      reviewId,
+    } = req.body;
 
     // 驗證輸入
     if (!originalComment || typeof originalComment !== "string") {
@@ -364,6 +373,25 @@ router.post("/modify-comment", async (req, res) => {
     if (!instruction || typeof instruction !== "string") {
       return res.status(400).json({
         error: "請提供修改指示",
+      });
+    }
+
+    const normalizedFullComment = String(fullComment || "").trim();
+    const normalizedSelectedText = String(
+      selectedText || originalComment || "",
+    ).trim();
+    const normalizedSelectionStart = Number.parseInt(selectionStart, 10);
+    const normalizedSelectionEnd = Number.parseInt(selectionEnd, 10);
+
+    if (!normalizedFullComment) {
+      return res.status(400).json({
+        error: "請提供完整評論內容",
+      });
+    }
+
+    if (!normalizedSelectedText) {
+      return res.status(400).json({
+        error: "請提供選取段落內容",
       });
     }
 
@@ -390,26 +418,40 @@ router.post("/modify-comment", async (req, res) => {
 
     // 建構 AI 提示詞
     const prompt = `你是專業的教育教案評論修改助手。
-請根據以下指示修改原始評論：
+請根據以下資訊，對完整評論進行局部修正並輸出完整評論全文：
 
-【原始評論】
-${originalComment}
+【完整原評論】
+${normalizedFullComment}
+
+【使用者選取的段落】
+${normalizedSelectedText}
+
+【選取範圍位置】
+起始索引：${Number.isFinite(normalizedSelectionStart) ? normalizedSelectionStart : "未知"}
+結束索引：${Number.isFinite(normalizedSelectionEnd) ? normalizedSelectionEnd : "未知"}
 
 【修改指示】
 ${instruction}
 
 【要求】
 1. 保持專業教育評論風格
-2. 只輸出修改後的評論文字，不要加任何前綴說明（如「修改後的評論：」）
-3. 保持評論的完整性和連貫性
-4. 根據指示調整語氣、內容或結構
-5. 回應長度應與原始評論相近
+2. 僅針對選取段落做必要調整，其他段落盡量維持原意與結構
+3. 必須輸出「完整評論全文」，不可只輸出局部段落
+4. 不限制輸出字數，以完整性、連貫性與可讀性優先
+5. 每個段落都必須完整收尾，最後一句不得中途截斷
+6. 不要加入任何前綴或說明文字（例如：修改後評論）
 
-請直接輸出修改後的評論：`;
+請直接輸出最終完整評論全文：`;
 
     // 呼叫 Gemini API
     const geminiClient = require("../services/geminiClient");
-    const modifiedComment = await geminiClient.generateResponse(prompt);
+    const draftComment = await geminiClient.generateResponse(prompt);
+    const modifiedComment = await ensureFullAndCompleteComment({
+      draftComment,
+      fullComment: normalizedFullComment,
+      prompt,
+      geminiClient,
+    });
 
     await ReviewRecord.updateOne(
       {
@@ -431,6 +473,7 @@ ${instruction}
     res.json({
       success: true,
       modifiedComment: modifiedComment.trim(),
+      fullComment: modifiedComment.trim(),
       reviewId: normalizedReviewId,
     });
   } catch (error) {
@@ -602,6 +645,64 @@ function normalizeReviewId(rawReviewId) {
   }
 
   return reviewId;
+}
+
+function hasCompleteEnding(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return /[。！？.!?」』）)]\s*$/.test(normalized);
+}
+
+function isLikelyFullComment(candidate, originalFullComment) {
+  const candidateText = String(candidate || "").trim();
+  const originalText = String(originalFullComment || "").trim();
+
+  if (!candidateText) {
+    return false;
+  }
+
+  if (!originalText) {
+    return candidateText.length > 0;
+  }
+
+  const minLength = Math.max(120, Math.floor(originalText.length * 0.55));
+  return candidateText.length >= minLength;
+}
+
+async function ensureFullAndCompleteComment({
+  draftComment,
+  fullComment,
+  prompt,
+  geminiClient,
+}) {
+  const firstPass = String(draftComment || "").trim();
+  const firstPassValid =
+    isLikelyFullComment(firstPass, fullComment) && hasCompleteEnding(firstPass);
+
+  if (firstPassValid) {
+    return firstPass;
+  }
+
+  const retryPrompt = `${prompt}\n\n【重要補充】\n上一版輸出可能過短或結尾不完整。\n請重新輸出「完整評論全文」，保持段落完整，最後一句必須完整收束，且不得只輸出局部修改片段。`;
+
+  try {
+    const retryComment = await geminiClient.generateResponse(retryPrompt);
+    const secondPass = String(retryComment || "").trim();
+    const secondPassValid =
+      isLikelyFullComment(secondPass, fullComment) &&
+      hasCompleteEnding(secondPass);
+
+    if (secondPassValid) {
+      return secondPass;
+    }
+  } catch (error) {
+    console.warn("modify-comment 重試生成失敗:", error.message);
+  }
+
+  return firstPass;
 }
 
 module.exports = router;
