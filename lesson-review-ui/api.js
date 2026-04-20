@@ -22,8 +22,8 @@
   }
 
   function clearLegacyGuestSessionKeys() {
-    removeLocalValue(STORAGE_KEYS.guestSessionId);
-    removeLocalValue(LEGACY_STORAGE_KEYS.guestSessionId);
+    removeStorageValue(false, STORAGE_KEYS.guestSessionId);
+    removeStorageValue(false, LEGACY_STORAGE_KEYS.guestSessionId);
   }
 
   function getStorageArea(isSessionStorage) {
