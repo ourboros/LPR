@@ -985,6 +985,10 @@ function calcOutsideDiffRatio(
   selectedStart,
   selectedEnd,
 ) {
+  const totalLengthDelta =
+    String(candidatePlain || "").length - String(originalPlain || "").length;
+  const candidateAdjustedEnd = selectedEnd + totalLengthDelta;
+
   const originalSlices = extractOutsideSlices(
     originalPlain,
     selectedStart,
@@ -993,7 +997,7 @@ function calcOutsideDiffRatio(
   const candidateSlices = extractOutsideSlices(
     candidatePlain,
     selectedStart,
-    selectedEnd,
+    candidateAdjustedEnd,
   );
 
   const beforeOriginal = originalSlices.before.slice(-1200);
@@ -1017,7 +1021,7 @@ function calcOutsideDiffRatio(
 
 function getOutsideDiffThreshold(markdownText) {
   const markdownCount = countMarkdownTokens(markdownText);
-  return markdownCount >= 6 ? 0.05 : 0.08;
+  return markdownCount >= 6 ? 0.09 : 0.12;
 }
 
 function buildGuardError(code, message, hint, details = {}) {
