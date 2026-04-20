@@ -13,6 +13,18 @@
     guestSessionId: "lpr.guestSessionId",
   };
 
+  function isGuestSessionKey(primaryKey, legacyKey) {
+    return (
+      primaryKey === STORAGE_KEYS.guestSessionId ||
+      legacyKey === LEGACY_STORAGE_KEYS.guestSessionId
+    );
+  }
+
+  function clearLegacyGuestSessionKeys() {
+    localStorage.removeItem(STORAGE_KEYS.guestSessionId);
+    localStorage.removeItem(LEGACY_STORAGE_KEYS.guestSessionId);
+  }
+
   function resolveApiOrigin() {
     const { protocol, hostname, origin, port } = window.location;
     const isLocalHttp =
@@ -35,6 +47,22 @@
   }
 
   function getStoredValue(primaryKey, legacyKey) {
+    if (isGuestSessionKey(primaryKey, legacyKey)) {
+      const primaryValue = sessionStorage.getItem(primaryKey);
+      if (primaryValue !== null) {
+        return primaryValue;
+      }
+
+      const legacyValue = sessionStorage.getItem(legacyKey);
+      if (legacyValue !== null) {
+        sessionStorage.setItem(primaryKey, legacyValue);
+        sessionStorage.removeItem(legacyKey);
+        return legacyValue;
+      }
+
+      return "";
+    }
+
     const primaryValue = localStorage.getItem(primaryKey);
     if (primaryValue !== null) {
       return primaryValue;
@@ -50,6 +78,20 @@
   }
 
   function setStoredValue(primaryKey, legacyKey, value) {
+    if (isGuestSessionKey(primaryKey, legacyKey)) {
+      if (value === null || value === undefined || value === "") {
+        sessionStorage.removeItem(primaryKey);
+        sessionStorage.removeItem(legacyKey);
+        clearLegacyGuestSessionKeys();
+        return;
+      }
+
+      sessionStorage.setItem(primaryKey, String(value));
+      sessionStorage.removeItem(legacyKey);
+      clearLegacyGuestSessionKeys();
+      return;
+    }
+
     if (value === null || value === undefined || value === "") {
       localStorage.removeItem(primaryKey);
       localStorage.removeItem(legacyKey);
@@ -137,6 +179,9 @@
 
   const API_ORIGIN = resolveApiOrigin();
   const API_BASE_URL = `${API_ORIGIN}/api`;
+
+  // 兼容舊版本：移除 localStorage 的 guest session，避免重開瀏覽器仍延續舊會話
+  clearLegacyGuestSessionKeys();
 
   window.LPR = {
     API_BASE_URL,

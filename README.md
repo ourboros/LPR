@@ -244,7 +244,7 @@ Gemini API (內容生成)
 7. GET /api/chat/criteria
 8. DELETE /api/chat/session/:sessionId
 
-備註：Guest session 生命週期改為手動管理，可透過 DELETE 或 `window.LPR.closeGuestSession()` 主動關閉；不再依賴 beforeunload 事件自動清理。
+備註：Guest sessionId 由前端儲存在 sessionStorage，關閉瀏覽器後會自然失效；如需立即清除，仍可透過 DELETE 或 `window.LPR.closeGuestSession()` 主動關閉。
 
 ### 8.3 Scores
 
@@ -359,7 +359,7 @@ Gemini API (內容生成)
 2. 本專案目前搜尋引擎預設為 simple（關鍵字比對），尚未接入實際向量資料庫。
 3. 對話 session 暫存於記憶體，重啟服務後會清空。
 4. Guest 資料有效期 24 小時，透過 6 小時定時清理工作自動移除過期資料。
-5. Guest session 可透過 `window.LPR.closeGuestSession()` 手動關閉（例如在登出時）；不依賴 beforeunload 自動清理，保護頁面導航時資料持久性。
+5. Guest sessionId 儲存在 sessionStorage，關閉瀏覽器後不會延續舊會話；可透過 `window.LPR.closeGuestSession()` 立即清除當前 guest 資料。
 
 ---
 
@@ -417,14 +417,14 @@ Gemini API (內容生成)
 
 ### Guest 會話管理改進
 
-1. **手動生命週期管理** (2026/04): Guest session 不再依賴 beforeunload 自動清理。
-   - 移除：lesson-review-ui/api.js 中的 beforeunload 事件監聽。
-   - 新增：window.LPR.closeGuestSession() 手動 API。
-   - 效果：修復「上傳教案後立即切換頁面導致資料丟失」的問題。
+1. **Guest 會話持久性修補** (2026/04): guestSessionId 改為 sessionStorage。
+   - 調整：lesson-review-ui/api.js 改為 guest key 只寫入 sessionStorage。
+   - 兼容：啟動時清除 localStorage 的舊 guest key，避免歷史會話殘留。
+   - 效果：修復「關閉瀏覽器後仍延續舊上傳與評論紀錄」問題。
 
 2. **CORS 頭暴露** (2026/04): 後端新增 exposedHeaders: ["x-session-id"]。
    - 對應文件：backend/app.js
-   - 效果：前端能正確讀取並持久化 guest session ID。
+   - 效果：前端能正確讀取 guest session ID 並維持同分頁會話。
 
 ### UI/UX 改進
 
