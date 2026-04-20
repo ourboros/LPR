@@ -108,6 +108,14 @@
               `outsideDiff=${ratio.toFixed(4)}/${threshold.toFixed(4)}`,
             );
           }
+          const anchoredRatio = Number(details.anchoredOutsideDiffRatio);
+          if (Number.isFinite(anchoredRatio)) {
+            parts.push(`anchored=${anchoredRatio.toFixed(4)}`);
+          }
+          const fallbackRatio = Number(details.fallbackOutsideDiffRatio);
+          if (Number.isFinite(fallbackRatio)) {
+            parts.push(`fallback=${fallbackRatio.toFixed(4)}`);
+          }
           if (
             typeof details.candidateSelectionMethod === "string" &&
             details.candidateSelectionMethod

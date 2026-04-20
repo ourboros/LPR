@@ -1288,20 +1288,16 @@ async function ensureFullAndCompleteComment({
       candidatePosition.start,
       candidatePosition.end,
     );
-    let outsideDiffRatio = anchoredOutsideDiffRatio;
-
-    if (candidatePosition.method.startsWith("context-only")) {
-      const fallbackOutsideDiffRatio = calcOutsideDiffRatio(
-        originalPlain,
-        candidatePlain,
-        selectedStart,
-        selectedEnd,
-      );
-      outsideDiffRatio = Math.min(
-        anchoredOutsideDiffRatio,
-        fallbackOutsideDiffRatio,
-      );
-    }
+    const fallbackOutsideDiffRatio = calcOutsideDiffRatio(
+      originalPlain,
+      candidatePlain,
+      selectedStart,
+      selectedEnd,
+    );
+    const useMinOutsideDiff = candidatePosition.method !== "anchor-exact";
+    const outsideDiffRatio = useMinOutsideDiff
+      ? Math.min(anchoredOutsideDiffRatio, fallbackOutsideDiffRatio)
+      : anchoredOutsideDiffRatio;
 
     const valid =
       isLikelyFullComment(candidateText, fullComment) &&
@@ -1313,6 +1309,7 @@ async function ensureFullAndCompleteComment({
       valid,
       outsideDiffRatio,
       anchoredOutsideDiffRatio,
+      fallbackOutsideDiffRatio,
       outsideThreshold,
       candidateSelectionMethod: candidatePosition.method,
       candidateSelectionIsUnique: candidatePosition.isUnique,
