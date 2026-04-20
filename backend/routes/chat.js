@@ -943,6 +943,10 @@ function locateSpanByContextsOnly(
   const text = String(plainSnapshot || "");
   const before = String(contextBefore || "");
   const after = String(contextAfter || "");
+  const expectedLength =
+    Number.isFinite(fallbackStart) && Number.isFinite(fallbackEnd)
+      ? Math.max(0, fallbackEnd - fallbackStart)
+      : 0;
 
   if (!text || (!before && !after)) {
     return {
@@ -954,31 +958,133 @@ function locateSpanByContextsOnly(
     };
   }
 
-  let start = Number.isFinite(fallbackStart) ? fallbackStart : -1;
-  let end = Number.isFinite(fallbackEnd) ? fallbackEnd : -1;
+  const findAllOccurrences = (needle) => {
+    if (!needle) {
+      return [];
+    }
 
-  if (before) {
-    const beforeIdx = text.lastIndexOf(before, Math.max(0, fallbackStart + 1));
-    if (beforeIdx >= 0) {
-      start = beforeIdx + before.length;
+    const results = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      const idx = text.indexOf(needle, cursor);
+      if (idx < 0) {
+        break;
+      }
+      results.push(idx);
+      cursor = idx + Math.max(1, needle.length);
+    }
+    return results;
+  };
+
+  const beforeStarts = findAllOccurrences(before).map(
+    (idx) => idx + before.length,
+  );
+  const afterStarts = findAllOccurrences(after);
+
+  if (beforeStarts.length > 0 && afterStarts.length > 0) {
+    const pairCandidates = [];
+
+    for (const start of beforeStarts) {
+      for (const afterIdx of afterStarts) {
+        if (afterIdx < start) {
+          continue;
+        }
+
+        const spanLength = afterIdx - start;
+        const fallbackDistance = Number.isFinite(fallbackStart)
+          ? Math.abs(start - fallbackStart)
+          : 0;
+        const lengthDistance = expectedLength
+          ? Math.abs(spanLength - expectedLength)
+          : 0;
+        const score = fallbackDistance + lengthDistance * 0.6;
+
+        pairCandidates.push({
+          start,
+          end: afterIdx,
+          score,
+        });
+      }
+    }
+
+    if (pairCandidates.length > 0) {
+      pairCandidates.sort((a, b) => a.score - b.score);
+      const best = pairCandidates[0];
+      const bestSpan = best.end - best.start;
+      const maxAllowedSpan =
+        expectedLength > 0 ? expectedLength * 4 + 120 : 800;
+
+      if (bestSpan <= maxAllowedSpan) {
+        return {
+          start: best.start,
+          end: best.end,
+          method: "context-only",
+          isUnique: pairCandidates.length === 1,
+          candidateCount: pairCandidates.length,
+        };
+      }
     }
   }
 
-  if (after && start >= 0) {
-    const afterIdx = text.indexOf(after, start);
-    if (afterIdx >= start) {
-      end = afterIdx;
+  if (beforeStarts.length > 0) {
+    let nearestStart = beforeStarts[0];
+    let minDistance = Number.isFinite(fallbackStart)
+      ? Math.abs(nearestStart - fallbackStart)
+      : 0;
+
+    for (let i = 1; i < beforeStarts.length; i += 1) {
+      const candidateStart = beforeStarts[i];
+      const distance = Number.isFinite(fallbackStart)
+        ? Math.abs(candidateStart - fallbackStart)
+        : 0;
+      if (distance < minDistance) {
+        nearestStart = candidateStart;
+        minDistance = distance;
+      }
+    }
+
+    const end = Math.min(
+      text.length,
+      nearestStart + Math.max(expectedLength, 1),
+    );
+    if (end >= nearestStart) {
+      return {
+        start: nearestStart,
+        end,
+        method: "context-only-partial",
+        isUnique: beforeStarts.length === 1,
+        candidateCount: beforeStarts.length,
+      };
     }
   }
 
-  if (start >= 0 && end >= start) {
-    return {
-      start,
-      end,
-      method: "context-only",
-      isUnique: true,
-      candidateCount: 1,
-    };
+  if (afterStarts.length > 0) {
+    let nearestAfter = afterStarts[0];
+    let minDistance = Number.isFinite(fallbackEnd)
+      ? Math.abs(nearestAfter - fallbackEnd)
+      : 0;
+
+    for (let i = 1; i < afterStarts.length; i += 1) {
+      const candidateAfter = afterStarts[i];
+      const distance = Number.isFinite(fallbackEnd)
+        ? Math.abs(candidateAfter - fallbackEnd)
+        : 0;
+      if (distance < minDistance) {
+        nearestAfter = candidateAfter;
+        minDistance = distance;
+      }
+    }
+
+    const start = Math.max(0, nearestAfter - Math.max(expectedLength, 1));
+    if (nearestAfter >= start) {
+      return {
+        start,
+        end: nearestAfter,
+        method: "context-only-partial",
+        isUnique: afterStarts.length === 1,
+        candidateCount: afterStarts.length,
+      };
+    }
   }
 
   return {
@@ -1174,7 +1280,7 @@ async function ensureFullAndCompleteComment({
       );
     }
 
-    const outsideDiffRatio = calcOutsideDiffRatio(
+    const anchoredOutsideDiffRatio = calcOutsideDiffRatio(
       originalPlain,
       candidatePlain,
       selectedStart,
@@ -1182,6 +1288,21 @@ async function ensureFullAndCompleteComment({
       candidatePosition.start,
       candidatePosition.end,
     );
+    let outsideDiffRatio = anchoredOutsideDiffRatio;
+
+    if (candidatePosition.method.startsWith("context-only")) {
+      const fallbackOutsideDiffRatio = calcOutsideDiffRatio(
+        originalPlain,
+        candidatePlain,
+        selectedStart,
+        selectedEnd,
+      );
+      outsideDiffRatio = Math.min(
+        anchoredOutsideDiffRatio,
+        fallbackOutsideDiffRatio,
+      );
+    }
+
     const valid =
       isLikelyFullComment(candidateText, fullComment) &&
       hasCompleteEnding(candidateText) &&
@@ -1191,6 +1312,7 @@ async function ensureFullAndCompleteComment({
     return {
       valid,
       outsideDiffRatio,
+      anchoredOutsideDiffRatio,
       outsideThreshold,
       candidateSelectionMethod: candidatePosition.method,
       candidateSelectionIsUnique: candidatePosition.isUnique,
