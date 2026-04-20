@@ -1,8 +1,5 @@
 const reviewResult = document.getElementById("reviewResult");
 const regenerateBtn = document.getElementById("regenerateBtn");
-const chatForm = document.getElementById("chatForm");
-const chatInput = document.getElementById("chatInput");
-const sendBtn = document.getElementById("sendBtn");
 const menuBtn = document.querySelector(".menu-btn");
 const pageShell = document.querySelector(".page-shell");
 const commentEditor = document.getElementById("commentEditor");
@@ -78,14 +75,6 @@ function setGenerationState(generating, options = {}) {
   const { showRegenerate = false } = options;
   isGenerating = generating;
 
-  if (chatInput) {
-    chatInput.disabled = generating;
-  }
-
-  if (sendBtn) {
-    sendBtn.disabled = generating;
-  }
-
   if (!regenerateBtn) {
     return;
   }
@@ -122,17 +111,8 @@ function createReviewBubble(content, reviewId = null) {
   return bubble;
 }
 
-function createUserBubble(content) {
-  const bubble = document.createElement("div");
-  bubble.className = "user-message";
-  bubble.textContent = content;
-  reviewResult.appendChild(bubble);
-  reviewResult.scrollTop = reviewResult.scrollHeight;
-  return bubble;
-}
-
 async function requestReview(message, options = {}) {
-  const { clearExisting = false, showUserMessage = false } = options;
+  const { clearExisting = false } = options;
   const lessonId = window.LPR?.getCurrentLessonId();
 
   if (isGenerating) {
@@ -149,13 +129,6 @@ async function requestReview(message, options = {}) {
   if (!lessonId) {
     createReviewBubble("尚未選擇教案，請先返回上傳頁面完成教案上傳。");
     return;
-  }
-
-  // ✅ 修改：只在第一次生成時顯示用戶消息氣泡
-  // 後續對話（已有 reviewHistory）不顯示用戶消息，避免對話混亂
-  const isFirstGeneration = reviewHistory.length === 0;
-  if (showUserMessage && isFirstGeneration) {
-    createUserBubble(message);
   }
 
   setGenerationState(true);
@@ -235,7 +208,6 @@ async function loadAndInjectFormalReviewHistory() {
       const content = String(item.aiContent || "").trim();
 
       if (prompt) {
-        createUserBubble(prompt);
         reviewHistory.push({
           role: "user",
           content: prompt,
@@ -453,15 +425,6 @@ regenerateBtn.addEventListener("click", async () => {
     '<i class="fa-solid fa-rotate-right"></i> 重新生成評論';
 });
 
-// 送出訊息邏輯
-chatForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  hideCommentEditor();
-  await sendMessage(chatInput.value);
-  chatInput.value = "";
-  chatInput.focus();
-});
-
 reviewResult.addEventListener("mouseup", () => {
   setTimeout(() => {
     handleReviewSelection();
@@ -613,11 +576,6 @@ commentEditorApply.addEventListener("click", async () => {
     selectedReviewBubble.dataset.rawMarkdown = fullComment;
     renderReviewContent(selectedReviewBubble, fullComment);
 
-    const previousBubble = selectedReviewBubble.previousElementSibling;
-    if (previousBubble?.classList.contains("user-message")) {
-      previousBubble.remove();
-    }
-
     reviewHistory = reviewHistory.filter(
       (item) =>
         !(String(item.reviewId) === responseReviewId && item.role === "user"),
@@ -666,12 +624,3 @@ document.addEventListener("mousedown", (event) => {
     hideCommentEditor();
   }
 });
-
-async function sendMessage(text) {
-  const message = text.trim();
-  if (!message) {
-    return;
-  }
-
-  await requestReview(message, { showUserMessage: true });
-}

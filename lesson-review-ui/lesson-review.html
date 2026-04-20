@@ -68,41 +68,18 @@
 
       <main class="main-panel">
         <section class="review-canvas" aria-label="教案評論區">
-          <!-- 中央：AI評論結果區域 -->
+          <!-- 中央：AI 評論畫布區域 -->
           <div id="reviewResult" class="review-result">
             <!-- AI評論內容將自動生成 -->
           </div>
 
-          <!-- 重新生成按鈕 -->
+          <!-- 底部操作：重新生成評論 -->
           <div class="regenerate-section">
             <button id="regenerateBtn" class="regenerate-btn" type="button">
               <i class="fa-solid fa-rotate-right"></i>
               重新生成評論
             </button>
           </div>
-
-          <!-- 底部輸入組 -->
-          <form id="chatForm" class="composer" autocomplete="off">
-            <label class="sr-only" for="chatInput">輸入訊息</label>
-            <input
-              id="chatInput"
-              name="chatInput"
-              type="text"
-              placeholder="輸入你對教案的提問或要求..."
-              required
-            />
-            <button
-              id="sendBtn"
-              class="send-btn"
-              type="submit"
-              aria-label="送出訊息"
-            >
-              <i
-                class="fa-regular fa-paper-plane fa-rotate-by"
-                style="--fa-rotate-angle: 45deg"
-              ></i>
-            </button>
-          </form>
         </section>
 
         <section id="commentEditor" class="comment-editor" hidden>
