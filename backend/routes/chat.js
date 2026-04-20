@@ -514,6 +514,9 @@ ${instruction}
       plainSnapshot: normalizedPlainSnapshot,
       selectedStart: plainPosition.start,
       selectedEnd: plainPosition.end,
+      selectedText: normalizedSelectedText,
+      plainContextBefore: normalizedPlainContextBefore,
+      plainContextAfter: normalizedPlainContextAfter,
       prompt,
       geminiClient,
     });
@@ -930,6 +933,63 @@ function locateSelectedSpanByAnchors(
   };
 }
 
+function locateSpanByContextsOnly(
+  plainSnapshot,
+  contextBefore,
+  contextAfter,
+  fallbackStart,
+  fallbackEnd,
+) {
+  const text = String(plainSnapshot || "");
+  const before = String(contextBefore || "");
+  const after = String(contextAfter || "");
+
+  if (!text || (!before && !after)) {
+    return {
+      start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
+      end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+      method: "fallback-index",
+      isUnique: false,
+      candidateCount: 0,
+    };
+  }
+
+  let start = Number.isFinite(fallbackStart) ? fallbackStart : -1;
+  let end = Number.isFinite(fallbackEnd) ? fallbackEnd : -1;
+
+  if (before) {
+    const beforeIdx = text.lastIndexOf(before, Math.max(0, fallbackStart + 1));
+    if (beforeIdx >= 0) {
+      start = beforeIdx + before.length;
+    }
+  }
+
+  if (after && start >= 0) {
+    const afterIdx = text.indexOf(after, start);
+    if (afterIdx >= start) {
+      end = afterIdx;
+    }
+  }
+
+  if (start >= 0 && end >= start) {
+    return {
+      start,
+      end,
+      method: "context-only",
+      isUnique: true,
+      candidateCount: 1,
+    };
+  }
+
+  return {
+    start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
+    end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+    method: "fallback-index",
+    isUnique: false,
+    candidateCount: 0,
+  };
+}
+
 function markdownToPlainText(text) {
   return String(text || "")
     .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
@@ -984,10 +1044,23 @@ function calcOutsideDiffRatio(
   candidatePlain,
   selectedStart,
   selectedEnd,
+  candidateSelectedStart,
+  candidateSelectedEnd,
 ) {
+  const hasCandidateRange =
+    Number.isFinite(candidateSelectedStart) &&
+    Number.isFinite(candidateSelectedEnd) &&
+    candidateSelectedEnd >= candidateSelectedStart;
+
   const totalLengthDelta =
     String(candidatePlain || "").length - String(originalPlain || "").length;
-  const candidateAdjustedEnd = selectedEnd + totalLengthDelta;
+  const fallbackCandidateEnd = selectedEnd + totalLengthDelta;
+  const effectiveCandidateStart = hasCandidateRange
+    ? candidateSelectedStart
+    : selectedStart;
+  const effectiveCandidateEnd = hasCandidateRange
+    ? candidateSelectedEnd
+    : fallbackCandidateEnd;
 
   const originalSlices = extractOutsideSlices(
     originalPlain,
@@ -996,8 +1069,8 @@ function calcOutsideDiffRatio(
   );
   const candidateSlices = extractOutsideSlices(
     candidatePlain,
-    selectedStart,
-    candidateAdjustedEnd,
+    effectiveCandidateStart,
+    effectiveCandidateEnd,
   );
 
   const beforeOriginal = originalSlices.before.slice(-1200);
@@ -1069,6 +1142,9 @@ async function ensureFullAndCompleteComment({
   plainSnapshot,
   selectedStart,
   selectedEnd,
+  selectedText,
+  plainContextBefore,
+  plainContextAfter,
   prompt,
   geminiClient,
 }) {
@@ -1079,11 +1155,32 @@ async function ensureFullAndCompleteComment({
 
   const validateCandidate = (candidateText) => {
     const candidatePlain = markdownToPlainText(candidateText);
+    let candidatePosition = locateSelectedSpanByAnchors(
+      candidatePlain,
+      selectedText,
+      plainContextBefore,
+      plainContextAfter,
+      selectedStart,
+      selectedEnd,
+    );
+
+    if (candidatePosition.method === "fallback-index") {
+      candidatePosition = locateSpanByContextsOnly(
+        candidatePlain,
+        plainContextBefore,
+        plainContextAfter,
+        selectedStart,
+        selectedEnd,
+      );
+    }
+
     const outsideDiffRatio = calcOutsideDiffRatio(
       originalPlain,
       candidatePlain,
       selectedStart,
       selectedEnd,
+      candidatePosition.start,
+      candidatePosition.end,
     );
     const valid =
       isLikelyFullComment(candidateText, fullComment) &&
@@ -1095,6 +1192,9 @@ async function ensureFullAndCompleteComment({
       valid,
       outsideDiffRatio,
       outsideThreshold,
+      candidateSelectionMethod: candidatePosition.method,
+      candidateSelectionIsUnique: candidatePosition.isUnique,
+      candidateSelectionCount: candidatePosition.candidateCount,
       markdownDropped: isMarkdownStructureUnexpectedlyDropped(
         fullComment,
         candidateText,
