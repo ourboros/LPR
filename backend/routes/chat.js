@@ -736,7 +736,61 @@ function hasCompleteEnding(text) {
     return false;
   }
 
-  return /[。！？.!?」』）)]\s*$/.test(normalized);
+  if (/[。！？.!?」』）)]\s*$/.test(normalized)) {
+    return true;
+  }
+
+  const lines = normalized
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return false;
+  }
+
+  const lastLine = lines[lines.length - 1];
+
+  // 若最後一行是完整清單項，視為可接受結尾
+  if (/^[-*+]\s+\S+/.test(lastLine) || /^\d+[.)]\s+\S+/.test(lastLine)) {
+    return true;
+  }
+
+  // 避免把明顯未完結的尾巴視為完成
+  if (/[，、,:：；（(\-]\s*$/.test(lastLine)) {
+    return false;
+  }
+
+  return lastLine.length >= 8;
+}
+
+async function repairIncompleteEnding(text, geminiClient) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const repairPrompt = `請只修復以下內容的最後結尾，保持前文不變，不新增新段落，不改寫既有內容。
+
+要求：
+1. 只能修正最後一段或最後一句的收尾完整性。
+2. 不可改動前文語意與結構。
+3. 保留原有 Markdown 結構。
+4. 請直接輸出修復後全文。
+
+【原文】
+${normalized}`;
+
+  try {
+    const repaired = await geminiClient.generateResponse(repairPrompt, [], {
+      temperature: 0.2,
+      maxOutputTokens: 2048,
+    });
+    return String(repaired || "").trim();
+  } catch (error) {
+    console.warn("repairIncompleteEnding 失敗:", error.message);
+    return normalized;
+  }
 }
 
 function isLikelyFullComment(candidate, originalFullComment) {
@@ -1072,12 +1126,36 @@ async function ensureFullAndCompleteComment({
       };
     }
 
+    // 僅結尾不完整時，先嘗試修補尾句，避免過度拒收
+    if (
+      secondValidation.fullEnough &&
+      !secondValidation.completeEnding &&
+      !secondValidation.markdownDropped
+    ) {
+      const repairedPass = await repairIncompleteEnding(
+        secondPass,
+        geminiClient,
+      );
+      const repairedValidation = validateCandidate(repairedPass);
+
+      if (repairedValidation.valid) {
+        return {
+          content: repairedPass,
+          retries: 2,
+          outsideDiffRatio: repairedValidation.outsideDiffRatio,
+        };
+      }
+    }
+
     if (!secondValidation.fullEnough) {
       throw buildGuardError(
         "INCOMPLETE_OUTPUT",
         "修改結果未通過完整性檢查，請重新選取後再試。",
         "請選取更明確段落並提供具體修改指示。",
-        secondValidation,
+        {
+          ...secondValidation,
+          retries: 1,
+        },
       );
     }
 
@@ -1086,7 +1164,10 @@ async function ensureFullAndCompleteComment({
         "INCOMPLETE_OUTPUT",
         "修改結果結尾不完整，已拒收本次修改。",
         "請重新嘗試，或縮小修改範圍。",
-        secondValidation,
+        {
+          ...secondValidation,
+          retries: 1,
+        },
       );
     }
 
