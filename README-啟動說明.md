@@ -64,7 +64,7 @@ node server.js
 
 - `http://localhost:5000/app/upload.html`
 
-## 5. 五頁流程驗證（刪除舊 UI 前必做）
+## 5. 四頁流程驗證（刪除舊 UI 前必做）
 
 依序驗證：
 
@@ -72,7 +72,6 @@ node server.js
 2. `index.html`：可取得 AI 回應（摘要/分析/建議）
 3. `lesson-review.html`：可生成評論、可局部修改
 4. `lesson-score.html`：可評分、儲存、讀回
-5. `lesson-view.html`：可顯示同 lesson 真實內容
 
 ## 6. API 驗證項目
 

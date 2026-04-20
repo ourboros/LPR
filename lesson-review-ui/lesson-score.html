@@ -40,12 +40,20 @@
             <span>紀錄教案評分</span>
           </button>
           <button
-            class="nav-item"
+            class="nav-item nav-item--action"
             type="button"
-            onclick="window.location.href = './lesson-view.html'"
+            data-nav-action="reupload"
           >
-            <i class="nav-icon fa-solid fa-file-lines"></i>
-            <span>查看教案</span>
+            <i class="nav-icon fa-solid fa-arrow-up-from-bracket"></i>
+            <span>重新上傳</span>
+          </button>
+          <button
+            class="nav-item nav-item--danger"
+            type="button"
+            data-nav-action="delete-history"
+          >
+            <i class="nav-icon fa-solid fa-trash"></i>
+            <span>刪除教案與評論紀錄</span>
           </button>
           <div class="nav-auth-block">
             <div data-auth-user class="nav-auth-user">目前未登入</div>
@@ -168,6 +176,7 @@
     <script src="/app/auth.js"></script>
     <script src="/app/api.js"></script>
     <script src="/app/auth-ui.js"></script>
+    <script src="/app/lesson-shared-actions.js"></script>
     <script src="/app/lesson-score.js"></script>
   </body>
 </html>

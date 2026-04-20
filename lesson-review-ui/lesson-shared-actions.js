@@ -1,0 +1,106 @@
+(function initializeLessonSharedActions() {
+  function navigateToUpload() {
+    window.location.href = "./upload.html";
+  }
+
+  function resolveActiveLessonId() {
+    const rawLessonId = window.LPR?.getCurrentLessonId?.();
+    const parsedLessonId = Number(rawLessonId);
+    if (!rawLessonId || !Number.isFinite(parsedLessonId)) {
+      return "";
+    }
+    return String(rawLessonId);
+  }
+
+  function extractErrorMessage(error) {
+    if (typeof error?.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch (stringifyError) {
+      return "未知錯誤";
+    }
+  }
+
+  async function handleDeleteHistory(event) {
+    event.preventDefault();
+
+    const targetButton = event.currentTarget;
+    if (!targetButton || targetButton.disabled) {
+      return;
+    }
+
+    const lessonId = resolveActiveLessonId();
+    if (!lessonId) {
+      navigateToUpload();
+      return;
+    }
+
+    targetButton.disabled = true;
+
+    try {
+      const preview = await window.LPR.request(
+        `/upload/lesson/${lessonId}/delete-preview?scope=history`,
+      );
+      const summary = `將刪除教案 ${preview.lessonCount} 筆、評論 ${preview.reviewCount} 筆、評分 ${preview.scoreCount} 筆、檔案 ${preview.fileCount} 筆。`;
+      const confirmed = window.confirm(
+        `${summary}\n\n確認刪除這份教案及同群組的評論與評分紀錄嗎？此動作無法復原。`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      await window.LPR.request(
+        `/upload/lesson/${lessonId}?cascade=true&scope=history`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      window.LPR.clearCurrentLesson();
+      sessionStorage.removeItem("chatSessionId");
+      sessionStorage.removeItem("reviewSessionId");
+      navigateToUpload();
+    } catch (error) {
+      alert(`刪除失敗：${extractErrorMessage(error)}`);
+    } finally {
+      targetButton.disabled = false;
+    }
+  }
+
+  function bindSharedNavActions() {
+    document
+      .querySelectorAll('[data-nav-action="reupload"]')
+      .forEach((button) => {
+        if (button.dataset.boundReupload === "true") {
+          return;
+        }
+
+        button.addEventListener("click", navigateToUpload);
+        button.dataset.boundReupload = "true";
+      });
+
+    document
+      .querySelectorAll('[data-nav-action="delete-history"]')
+      .forEach((button) => {
+        if (button.dataset.boundDeleteHistory === "true") {
+          return;
+        }
+
+        button.addEventListener("click", handleDeleteHistory);
+        button.dataset.boundDeleteHistory = "true";
+      });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindSharedNavActions);
+    return;
+  }
+
+  bindSharedNavActions();
+})();
