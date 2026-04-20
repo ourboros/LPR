@@ -430,7 +430,12 @@ router.post("/modify-comment", async (req, res) => {
       normalizedSelectionEnd,
     );
 
-    if (!plainPosition.isUnique) {
+    const alignmentStrictFail =
+      !plainPosition.isUnique &&
+      !Number.isFinite(normalizedSelectionStart) &&
+      plainPosition.candidateCount > 1;
+
+    if (alignmentStrictFail) {
       return res.status(422).json({
         error: "修改評論時發生錯誤",
         code: "ALIGNMENT_NOT_UNIQUE",
@@ -446,7 +451,7 @@ router.post("/modify-comment", async (req, res) => {
     if (
       plainPosition.method === "fallback-index" &&
       Number.isFinite(normalizedSelectionStart) &&
-      Math.abs(plainPosition.start - normalizedSelectionStart) > 40
+      Math.abs(plainPosition.start - normalizedSelectionStart) > 160
     ) {
       return res.status(422).json({
         error: "修改評論時發生錯誤",
@@ -539,6 +544,7 @@ ${instruction}
       selectionGuard: {
         method: plainPosition.method,
         isUnique: plainPosition.isUnique,
+        candidateCount: plainPosition.candidateCount,
         outsideDiffRatio: guardResult.outsideDiffRatio,
         retries: guardResult.retries,
       },

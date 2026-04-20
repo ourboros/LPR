@@ -80,7 +80,7 @@
       if (typeof payload === "string") {
         message = payload;
       } else if (payload && typeof payload === "object") {
-        const rawMessage = payload.error ?? payload.message;
+        const rawMessage = payload.message ?? payload.error;
         if (typeof rawMessage === "string") {
           message = rawMessage;
         } else if (rawMessage && typeof rawMessage === "object") {

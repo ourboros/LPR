@@ -337,7 +337,8 @@ function handleReviewSelection() {
     return;
   }
 
-  const text = selection.toString().trim();
+  const rawText = selection.toString();
+  const text = rawText.trim();
   if (!text) {
     hideCommentEditor();
     return;
@@ -351,7 +352,7 @@ function handleReviewSelection() {
 
   // 儲存選取範圍和原始文字
   activeSelectionRange = selectedRange.cloneRange();
-  selectedOriginalText = text;
+  selectedOriginalText = rawText;
 
   const anchorNode = selectedRange.commonAncestorContainer;
   const anchorElement =
