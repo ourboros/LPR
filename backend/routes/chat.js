@@ -380,9 +380,8 @@ router.post("/modify-comment", async (req, res) => {
     }
 
     const normalizedFullComment = String(fullComment || "").trim();
-    const normalizedSelectedText = String(
-      selectedText || originalComment || "",
-    ).trim();
+    const selectedTextRaw = String(selectedText || originalComment || "");
+    const normalizedSelectedText = selectedTextRaw.trim();
     const normalizedSelectionStart = Number.parseInt(selectionStart, 10);
     const normalizedSelectionEnd = Number.parseInt(selectionEnd, 10);
     const normalizedPlainContextBefore = String(plainContextBefore || "");
@@ -424,12 +423,43 @@ router.post("/modify-comment", async (req, res) => {
 
     const plainPosition = locateSelectedSpanByAnchors(
       normalizedPlainSnapshot,
-      normalizedSelectedText,
+      selectedTextRaw,
       normalizedPlainContextBefore,
       normalizedPlainContextAfter,
       normalizedSelectionStart,
       normalizedSelectionEnd,
     );
+
+    if (!plainPosition.isUnique) {
+      return res.status(422).json({
+        error: "修改評論時發生錯誤",
+        code: "ALIGNMENT_NOT_UNIQUE",
+        message: "無法唯一定位選取段落，請縮小選取範圍後再試。",
+        hint: "請重新選取更短且更具辨識度的文字，再執行修改。",
+        details: {
+          method: plainPosition.method,
+          candidateCount: plainPosition.candidateCount,
+        },
+      });
+    }
+
+    if (
+      plainPosition.method === "fallback-index" &&
+      Number.isFinite(normalizedSelectionStart) &&
+      Math.abs(plainPosition.start - normalizedSelectionStart) > 40
+    ) {
+      return res.status(422).json({
+        error: "修改評論時發生錯誤",
+        code: "ALIGNMENT_LOW_CONFIDENCE",
+        message: "選取段落定位可信度不足，請重新選取後再試。",
+        hint: "建議縮小選取範圍，並避免只選取重複出現的短語句。",
+        details: {
+          method: plainPosition.method,
+          serverStart: plainPosition.start,
+          clientStart: normalizedSelectionStart,
+        },
+      });
+    }
 
     // 建構 AI 提示詞
     const prompt = `你是專業的教育教案評論修改助手。
@@ -465,19 +495,24 @@ ${instruction}
 4. 不限制輸出字數，以完整性、連貫性與可讀性優先
 5. 每個段落都必須完整收尾，最後一句不得中途截斷
 6. 保留原有 Markdown 結構（標題、清單、粗體、引用、程式區塊）
-7. 不要加入任何前綴或說明文字（例如：修改後評論）
+7. 選取範圍以外的內容不得大幅改寫、刪除或重排
+8. 不要加入任何前綴或說明文字（例如：修改後評論）
 
 請直接輸出最終完整評論全文：`;
 
     // 呼叫 Gemini API
     const geminiClient = require("../services/geminiClient");
     const draftComment = await geminiClient.generateResponse(prompt);
-    const modifiedComment = await ensureFullAndCompleteComment({
+    const guardResult = await ensureFullAndCompleteComment({
       draftComment,
       fullComment: normalizedFullComment,
+      plainSnapshot: normalizedPlainSnapshot,
+      selectedStart: plainPosition.start,
+      selectedEnd: plainPosition.end,
       prompt,
       geminiClient,
     });
+    const modifiedComment = guardResult.content;
 
     await ReviewRecord.updateOne(
       {
@@ -501,6 +536,12 @@ ${instruction}
       modifiedComment: modifiedComment.trim(),
       fullComment: modifiedComment.trim(),
       reviewId: normalizedReviewId,
+      selectionGuard: {
+        method: plainPosition.method,
+        isUnique: plainPosition.isUnique,
+        outsideDiffRatio: guardResult.outsideDiffRatio,
+        retries: guardResult.retries,
+      },
     });
   } catch (error) {
     handleAiRouteError(res, "修改評論時發生錯誤", error);
@@ -509,6 +550,16 @@ ${instruction}
 
 function handleAiRouteError(res, fallbackMessage, error) {
   console.error(`${fallbackMessage}:`, error);
+
+  if (error?.status === 422) {
+    return res.status(422).json({
+      error: fallbackMessage,
+      code: error.code || "MODIFY_GUARD_REJECTED",
+      message: error.message || "修改結果未通過一致性檢查，請重新選取後再試。",
+      hint: error.hint || "請縮小選取範圍並提供更具體修改指示。",
+      details: error.details || undefined,
+    });
+  }
 
   const message = String(error?.message || "未知錯誤");
   const isQuotaError =
@@ -707,7 +758,8 @@ function locateSelectedSpanByAnchors(
   fallbackEnd,
 ) {
   const text = String(plainSnapshot || "");
-  const target = String(selectedText || "");
+  const targetRaw = String(selectedText || "");
+  const target = targetRaw.trim();
   const before = String(contextBefore || "");
   const after = String(contextAfter || "");
 
@@ -715,17 +767,46 @@ function locateSelectedSpanByAnchors(
     return {
       start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
       end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+      method: "fallback-index",
+      isUnique: false,
+      candidateCount: 0,
     };
   }
 
-  if (before || after) {
-    let cursor = 0;
-    while (cursor < text.length) {
-      const idx = text.indexOf(target, cursor);
-      if (idx < 0) {
-        break;
-      }
+  const candidates = [];
+  let candidateCursor = 0;
+  while (candidateCursor < text.length) {
+    const idx = text.indexOf(target, candidateCursor);
+    if (idx < 0) {
+      break;
+    }
+    candidates.push(idx);
+    candidateCursor = idx + Math.max(1, target.length);
+  }
 
+  const selectNearest = (positions) => {
+    if (!positions.length) {
+      return -1;
+    }
+    if (!Number.isFinite(fallbackStart)) {
+      return positions[0];
+    }
+
+    let nearest = positions[0];
+    let minDistance = Math.abs(positions[0] - fallbackStart);
+    for (let i = 1; i < positions.length; i += 1) {
+      const distance = Math.abs(positions[i] - fallbackStart);
+      if (distance < minDistance) {
+        nearest = positions[i];
+        minDistance = distance;
+      }
+    }
+    return nearest;
+  };
+
+  if (before || after) {
+    const exactMatches = [];
+    for (const idx of candidates) {
       const beforeOk =
         !before || text.slice(Math.max(0, idx - before.length), idx) === before;
       const afterStart = idx + target.length;
@@ -733,22 +814,159 @@ function locateSelectedSpanByAnchors(
         !after || text.slice(afterStart, afterStart + after.length) === after;
 
       if (beforeOk && afterOk) {
-        return { start: idx, end: idx + target.length };
+        exactMatches.push(idx);
       }
+    }
 
-      cursor = idx + Math.max(1, target.length);
+    if (exactMatches.length === 1) {
+      return {
+        start: exactMatches[0],
+        end: exactMatches[0] + target.length,
+        method: "anchor-exact",
+        isUnique: true,
+        candidateCount: 1,
+      };
+    }
+
+    if (exactMatches.length > 1) {
+      const nearest = selectNearest(exactMatches);
+      return {
+        start: nearest,
+        end: nearest + target.length,
+        method: "anchor-ambiguous",
+        isUnique: false,
+        candidateCount: exactMatches.length,
+      };
     }
   }
 
-  const firstIdx = text.indexOf(target);
-  if (firstIdx >= 0 && text.indexOf(target, firstIdx + target.length) < 0) {
-    return { start: firstIdx, end: firstIdx + target.length };
+  if (candidates.length === 1) {
+    return {
+      start: candidates[0],
+      end: candidates[0] + target.length,
+      method: "unique-target",
+      isUnique: true,
+      candidateCount: 1,
+    };
+  }
+
+  if (candidates.length > 1) {
+    const nearest = selectNearest(candidates);
+    return {
+      start: nearest,
+      end: nearest + target.length,
+      method: "target-ambiguous",
+      isUnique: false,
+      candidateCount: candidates.length,
+    };
   }
 
   return {
     start: Number.isFinite(fallbackStart) ? fallbackStart : -1,
     end: Number.isFinite(fallbackEnd) ? fallbackEnd : -1,
+    method: "fallback-index",
+    isUnique: Number.isFinite(fallbackStart) && Number.isFinite(fallbackEnd),
+    candidateCount: 0,
   };
+}
+
+function markdownToPlainText(text) {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function normalizedTextForDiff(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function extractOutsideSlices(text, start, end) {
+  const source = String(text || "");
+  const safeStart = Math.max(0, Math.min(source.length, start));
+  const safeEnd = Math.max(safeStart, Math.min(source.length, end));
+
+  return {
+    before: source.slice(0, safeStart),
+    after: source.slice(safeEnd),
+  };
+}
+
+function charDiffRatio(base, candidate) {
+  const a = normalizedTextForDiff(base);
+  const b = normalizedTextForDiff(candidate);
+  const maxLen = Math.max(a.length, b.length, 1);
+  const minLen = Math.min(a.length, b.length);
+
+  let diffCount = Math.abs(a.length - b.length);
+  for (let i = 0; i < minLen; i += 1) {
+    if (a[i] !== b[i]) {
+      diffCount += 1;
+    }
+  }
+
+  return diffCount / maxLen;
+}
+
+function calcOutsideDiffRatio(
+  originalPlain,
+  candidatePlain,
+  selectedStart,
+  selectedEnd,
+) {
+  const originalSlices = extractOutsideSlices(
+    originalPlain,
+    selectedStart,
+    selectedEnd,
+  );
+  const candidateSlices = extractOutsideSlices(
+    candidatePlain,
+    selectedStart,
+    selectedEnd,
+  );
+
+  const beforeOriginal = originalSlices.before.slice(-1200);
+  const beforeCandidate = candidateSlices.before.slice(-1200);
+  const afterOriginal = originalSlices.after.slice(0, 1200);
+  const afterCandidate = candidateSlices.after.slice(0, 1200);
+
+  const beforeRatio = charDiffRatio(beforeOriginal, beforeCandidate);
+  const afterRatio = charDiffRatio(afterOriginal, afterCandidate);
+
+  const beforeWeight = Math.max(
+    beforeOriginal.length,
+    beforeCandidate.length,
+    1,
+  );
+  const afterWeight = Math.max(afterOriginal.length, afterCandidate.length, 1);
+  const totalWeight = beforeWeight + afterWeight;
+
+  return (beforeRatio * beforeWeight + afterRatio * afterWeight) / totalWeight;
+}
+
+function getOutsideDiffThreshold(markdownText) {
+  const markdownCount = countMarkdownTokens(markdownText);
+  return markdownCount >= 6 ? 0.05 : 0.08;
+}
+
+function buildGuardError(code, message, hint, details = {}) {
+  const error = new Error(message);
+  error.status = 422;
+  error.code = code;
+  error.hint = hint;
+  error.details = details;
+  return error;
 }
 
 function countMarkdownTokens(text) {
@@ -784,37 +1002,121 @@ function isMarkdownStructureUnexpectedlyDropped(original, candidate) {
 async function ensureFullAndCompleteComment({
   draftComment,
   fullComment,
+  plainSnapshot,
+  selectedStart,
+  selectedEnd,
   prompt,
   geminiClient,
 }) {
-  const firstPass = String(draftComment || "").trim();
-  const firstPassValid =
-    isLikelyFullComment(firstPass, fullComment) &&
-    hasCompleteEnding(firstPass) &&
-    !isMarkdownStructureUnexpectedlyDropped(fullComment, firstPass);
+  const originalPlain = String(
+    plainSnapshot || markdownToPlainText(fullComment),
+  );
+  const outsideThreshold = getOutsideDiffThreshold(fullComment);
 
-  if (firstPassValid) {
-    return firstPass;
+  const validateCandidate = (candidateText) => {
+    const candidatePlain = markdownToPlainText(candidateText);
+    const outsideDiffRatio = calcOutsideDiffRatio(
+      originalPlain,
+      candidatePlain,
+      selectedStart,
+      selectedEnd,
+    );
+    const valid =
+      isLikelyFullComment(candidateText, fullComment) &&
+      hasCompleteEnding(candidateText) &&
+      !isMarkdownStructureUnexpectedlyDropped(fullComment, candidateText) &&
+      outsideDiffRatio <= outsideThreshold;
+
+    return {
+      valid,
+      outsideDiffRatio,
+      outsideThreshold,
+      markdownDropped: isMarkdownStructureUnexpectedlyDropped(
+        fullComment,
+        candidateText,
+      ),
+      completeEnding: hasCompleteEnding(candidateText),
+      fullEnough: isLikelyFullComment(candidateText, fullComment),
+    };
+  };
+
+  const firstPass = String(draftComment || "").trim();
+  const firstValidation = validateCandidate(firstPass);
+
+  if (firstValidation.valid) {
+    return {
+      content: firstPass,
+      retries: 0,
+      outsideDiffRatio: firstValidation.outsideDiffRatio,
+    };
   }
 
-  const retryPrompt = `${prompt}\n\n【重要補充】\n上一版輸出可能過短、結尾不完整或遺失 Markdown 結構。\n請重新輸出「完整評論全文」，保留原有 Markdown 結構（例如標題、清單、粗體、引用、程式區塊），保持段落完整，最後一句必須完整收束，且不得只輸出局部修改片段。`;
+  const retryPrompt = `${prompt}\n\n【重要補充】\n上一版輸出未通過一致性檢查。\n請重新輸出「完整評論全文」，且必須同時滿足：\n1. 僅可修改選取段落，選取範圍外不得大幅改寫或刪除。\n2. 保留原有 Markdown 結構（標題、清單、粗體、引用、程式區塊）。\n3. 最後一句必須完整收束，不得中途截斷。`;
 
   try {
     const retryComment = await geminiClient.generateResponse(retryPrompt);
     const secondPass = String(retryComment || "").trim();
-    const secondPassValid =
-      isLikelyFullComment(secondPass, fullComment) &&
-      hasCompleteEnding(secondPass) &&
-      !isMarkdownStructureUnexpectedlyDropped(fullComment, secondPass);
+    const secondValidation = validateCandidate(secondPass);
 
-    if (secondPassValid) {
-      return secondPass;
+    if (secondValidation.valid) {
+      return {
+        content: secondPass,
+        retries: 1,
+        outsideDiffRatio: secondValidation.outsideDiffRatio,
+      };
     }
+
+    if (!secondValidation.fullEnough) {
+      throw buildGuardError(
+        "INCOMPLETE_OUTPUT",
+        "修改結果未通過完整性檢查，請重新選取後再試。",
+        "請選取更明確段落並提供具體修改指示。",
+        secondValidation,
+      );
+    }
+
+    if (!secondValidation.completeEnding) {
+      throw buildGuardError(
+        "INCOMPLETE_OUTPUT",
+        "修改結果結尾不完整，已拒收本次修改。",
+        "請重新嘗試，或縮小修改範圍。",
+        secondValidation,
+      );
+    }
+
+    if (secondValidation.markdownDropped) {
+      throw buildGuardError(
+        "MARKDOWN_DROPPED",
+        "修改結果造成 Markdown 結構流失，已拒收本次修改。",
+        "請重新選取較小範圍並重試。",
+        secondValidation,
+      );
+    }
+
+    throw buildGuardError(
+      "OUTSIDE_DIFF_TOO_HIGH",
+      "修改結果影響到選取範圍外內容，已拒收本次修改。",
+      "請縮小選取範圍，或把修改指示寫得更聚焦。",
+      secondValidation,
+    );
   } catch (error) {
+    if (error?.status === 422) {
+      throw error;
+    }
+
     console.warn("modify-comment 重試生成失敗:", error.message);
   }
 
-  return firstPass;
+  throw buildGuardError(
+    "MODIFY_GUARD_RETRY_FAILED",
+    "修改結果未通過一致性檢查，且重試失敗。",
+    "請稍後再試，或縮小選取範圍。",
+    {
+      retries: 1,
+      outsideDiffRatio: firstValidation.outsideDiffRatio,
+      outsideThreshold,
+    },
+  );
 }
 
 module.exports = router;
