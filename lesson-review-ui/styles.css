@@ -183,16 +183,15 @@ body:not(.auth-ui-ready) .nav-auth-block {
 }
 
 .nav-item--action {
-  background: var(--color-soft);
-  color: var(--color-deep);
+  background: transparent;
+  color: var(--color-bg);
   border-color: transparent;
 }
 
 .nav-item--action:hover,
 .nav-item--action:focus-visible {
-  background: var(--color-action);
-  color: var(--color-bg);
-  border-color: var(--color-action);
+  color: var(--color-soft);
+  border-color: var(--color-soft);
   outline: none;
 }
 
@@ -206,7 +205,7 @@ body:not(.auth-ui-ready) .nav-auth-block {
 .nav-item--danger:focus-visible {
   background: #c62828;
   color: #ffffff;
-  border-color: #c62828;
+  border-color: var(--color-bg);
   outline: none;
 }
 
