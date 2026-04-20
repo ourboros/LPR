@@ -466,61 +466,75 @@ router.post("/modify-comment", async (req, res) => {
       });
     }
 
-    // 建構 AI 提示詞
-    const prompt = `你是專業的教育教案評論修改助手。
-請根據以下資訊，對完整評論進行局部修正並輸出完整評論全文：
+    const markdownSelection = locateSelectionSpanInMarkdown({
+      fullComment: normalizedFullComment,
+      selectedText: selectedTextRaw,
+      plainStart: plainPosition.start,
+      plainEnd: plainPosition.end,
+    });
 
-【完整原評論】
-${normalizedFullComment}
+    if (!markdownSelection.found) {
+      return res.status(422).json({
+        error: "修改評論時發生錯誤",
+        code: "MARKDOWN_SPAN_NOT_FOUND",
+        message: "無法在原評論中定位選取段落，請重新選取後再試。",
+        hint: "請選取更具辨識度的完整句子，避免過短或重複片段。",
+        details: {
+          method: plainPosition.method,
+          plainStart: plainPosition.start,
+          plainEnd: plainPosition.end,
+        },
+      });
+    }
 
-【使用者選取的段落】
-${normalizedSelectedText}
+    const selectedMarkdownSlice = normalizedFullComment.slice(
+      markdownSelection.start,
+      markdownSelection.end,
+    );
 
-【選取範圍位置】
-起始索引：${Number.isFinite(normalizedSelectionStart) ? normalizedSelectionStart : "未知"}
-結束索引：${Number.isFinite(normalizedSelectionEnd) ? normalizedSelectionEnd : "未知"}
+    // 呼叫 Gemini API 只生成替換片段
+    const geminiClient = require("../services/geminiClient");
+    const replacementPrompt = `你是專業的教育教案評論修改助手。
+請根據使用者指示，僅改寫「選取段落」本身。
 
-【選取段落前文錨點】
-${normalizedPlainContextBefore || "（無）"}
-
-【選取段落後文錨點】
-${normalizedPlainContextAfter || "（無）"}
-
-【伺服器推定純文字位置】
-起始索引：${Number.isFinite(plainPosition.start) ? plainPosition.start : "未知"}
-結束索引：${Number.isFinite(plainPosition.end) ? plainPosition.end : "未知"}
+【選取段落（原文）】
+${selectedMarkdownSlice}
 
 【修改指示】
 ${instruction}
 
 【要求】
-1. 保持專業教育評論風格
-2. 僅針對選取段落做必要調整，其他段落盡量維持原意與結構
-3. 必須輸出「完整評論全文」，不可只輸出局部段落
-4. 不限制輸出字數，以完整性、連貫性與可讀性優先
-5. 每個段落都必須完整收尾，最後一句不得中途截斷
-6. 保留原有 Markdown 結構（標題、清單、粗體、引用、程式區塊）
-7. 選取範圍以外的內容不得大幅改寫、刪除或重排
-8. 不要加入任何前綴或說明文字（例如：修改後評論）
+1. 只輸出「替換後段落文字」，不要輸出整篇評論。
+2. 不要加任何前綴或說明（例如：修改後）。
+3. 保持原段落語氣與語境一致。
+4. 盡量保留原有 Markdown 語法風格。
 
-請直接輸出最終完整評論全文：`;
+請直接輸出替換後段落：`;
 
-    // 呼叫 Gemini API
-    const geminiClient = require("../services/geminiClient");
-    const draftComment = await geminiClient.generateResponse(prompt);
-    const guardResult = await ensureFullAndCompleteComment({
-      draftComment,
-      fullComment: normalizedFullComment,
-      plainSnapshot: normalizedPlainSnapshot,
-      selectedStart: plainPosition.start,
-      selectedEnd: plainPosition.end,
-      selectedText: normalizedSelectedText,
-      plainContextBefore: normalizedPlainContextBefore,
-      plainContextAfter: normalizedPlainContextAfter,
-      prompt,
-      geminiClient,
-    });
-    const modifiedComment = guardResult.content;
+    const replacementTextRaw =
+      await geminiClient.generateResponse(replacementPrompt);
+    const replacementText = String(replacementTextRaw || "").trim();
+
+    if (!replacementText) {
+      throw buildGuardError(
+        "PATCH_TEXT_INVALID",
+        "修改結果為空白，無法套用片段覆蓋。",
+        "請提供更具體的修改指示後再試。",
+      );
+    }
+
+    if (!isLikelySafeReplacement(selectedMarkdownSlice, replacementText)) {
+      throw buildGuardError(
+        "PATCH_TEXT_INVALID",
+        "修改片段疑似異常，已拒收本次修改。",
+        "請縮小選取範圍，或改用更聚焦的修改指示。",
+      );
+    }
+
+    const modifiedComment =
+      normalizedFullComment.slice(0, markdownSelection.start) +
+      replacementText +
+      normalizedFullComment.slice(markdownSelection.end);
 
     await ReviewRecord.updateOne(
       {
@@ -545,11 +559,11 @@ ${instruction}
       fullComment: modifiedComment.trim(),
       reviewId: normalizedReviewId,
       selectionGuard: {
-        method: plainPosition.method,
-        isUnique: plainPosition.isUnique,
-        candidateCount: plainPosition.candidateCount,
-        outsideDiffRatio: guardResult.outsideDiffRatio,
-        retries: guardResult.retries,
+        method: "segment-overwrite",
+        isUnique: markdownSelection.isUnique,
+        candidateCount: markdownSelection.candidateCount,
+        replacedLength: selectedMarkdownSlice.length,
+        replacementLength: replacementText.length,
       },
     });
   } catch (error) {
@@ -731,6 +745,116 @@ function normalizeReviewId(rawReviewId) {
   }
 
   return reviewId;
+}
+
+function locateSelectionSpanInMarkdown({
+  fullComment,
+  selectedText,
+  plainStart,
+  plainEnd,
+}) {
+  const source = String(fullComment || "");
+  const target = String(selectedText || "").trim();
+
+  if (!source || !target) {
+    return {
+      found: false,
+      start: -1,
+      end: -1,
+      isUnique: false,
+      candidateCount: 0,
+    };
+  }
+
+  const candidates = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const idx = source.indexOf(target, cursor);
+    if (idx < 0) {
+      break;
+    }
+
+    const prefixPlainLen = markdownToPlainText(source.slice(0, idx)).length;
+    const plainDistance = Number.isFinite(plainStart)
+      ? Math.abs(prefixPlainLen - plainStart)
+      : 0;
+
+    candidates.push({
+      start: idx,
+      end: idx + target.length,
+      plainDistance,
+    });
+    cursor = idx + Math.max(1, target.length);
+  }
+
+  if (candidates.length === 0) {
+    return {
+      found: false,
+      start: -1,
+      end: -1,
+      isUnique: false,
+      candidateCount: 0,
+    };
+  }
+
+  candidates.sort((a, b) => a.plainDistance - b.plainDistance);
+  const best = candidates[0];
+
+  const fallbackLength =
+    Number.isFinite(plainStart) &&
+    Number.isFinite(plainEnd) &&
+    plainEnd >= plainStart
+      ? plainEnd - plainStart
+      : target.length;
+
+  const expectedLen = Math.max(1, fallbackLength);
+  const candidateLen = best.end - best.start;
+  const lenDelta = Math.abs(candidateLen - expectedLen);
+  const maxLenDelta = Math.max(32, Math.floor(expectedLen * 1.2));
+
+  if (lenDelta > maxLenDelta && candidates.length === 1) {
+    return {
+      found: false,
+      start: -1,
+      end: -1,
+      isUnique: true,
+      candidateCount: 1,
+    };
+  }
+
+  return {
+    found: true,
+    start: best.start,
+    end: best.end,
+    isUnique: candidates.length === 1,
+    candidateCount: candidates.length,
+  };
+}
+
+function isLikelySafeReplacement(originalSegment, replacementSegment) {
+  const original = String(originalSegment || "").trim();
+  const replacement = String(replacementSegment || "").trim();
+
+  if (!replacement) {
+    return false;
+  }
+
+  const originalLen = Math.max(1, original.length);
+  const replacementLen = replacement.length;
+  const ratio = replacementLen / originalLen;
+
+  if (ratio < 0.2 || ratio > 5) {
+    return false;
+  }
+
+  const tripleBacktickDelta =
+    (replacement.match(/```/g) || []).length -
+    (original.match(/```/g) || []).length;
+  if (Math.abs(tripleBacktickDelta) > 1) {
+    return false;
+  }
+
+  return true;
 }
 
 function hasCompleteEnding(text) {
