@@ -76,6 +76,7 @@
 
     if (!response.ok) {
       let message = `HTTP ${response.status}`;
+      let detailSuffix = "";
 
       if (typeof payload === "string") {
         message = payload;
@@ -89,9 +90,38 @@
         } else {
           message = JSON.stringify(payload);
         }
+
+        const parts = [];
+        if (typeof payload.code === "string" && payload.code) {
+          parts.push(`code=${payload.code}`);
+        }
+        if (typeof payload.hint === "string" && payload.hint) {
+          parts.push(`hint=${payload.hint}`);
+        }
+
+        const details = payload.details;
+        if (details && typeof details === "object") {
+          const ratio = Number(details.outsideDiffRatio);
+          const threshold = Number(details.outsideThreshold);
+          if (Number.isFinite(ratio) && Number.isFinite(threshold)) {
+            parts.push(
+              `outsideDiff=${ratio.toFixed(4)}/${threshold.toFixed(4)}`,
+            );
+          }
+          if (
+            typeof details.candidateSelectionMethod === "string" &&
+            details.candidateSelectionMethod
+          ) {
+            parts.push(`anchor=${details.candidateSelectionMethod}`);
+          }
+        }
+
+        if (parts.length > 0) {
+          detailSuffix = ` (${parts.join(" | ")})`;
+        }
       }
 
-      throw new Error(message);
+      throw new Error(`${message}${detailSuffix}`);
     }
 
     return payload;

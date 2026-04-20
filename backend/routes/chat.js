@@ -1284,11 +1284,39 @@ async function ensureFullAndCompleteComment({
       );
     }
 
+    if (
+      secondValidation.fullEnough &&
+      secondValidation.completeEnding &&
+      !secondValidation.markdownDropped
+    ) {
+      const containmentPrompt = `${prompt}\n\n【最後保底規則（必須遵守）】\n上一版僅在「選取範圍外差異」超標。\n請重做一次，並嚴格遵守：\n1. 只允許修改選取段落。\n2. 選取段落以外文字必須盡可能逐字維持不變，不得改寫、不重排。\n3. 必須輸出完整評論全文，保持既有 Markdown 結構。\n4. 最後一句完整收束。`;
+
+      try {
+        const containmentComment =
+          await geminiClient.generateResponse(containmentPrompt);
+        const containmentPass = String(containmentComment || "").trim();
+        const containmentValidation = validateCandidate(containmentPass);
+
+        if (containmentValidation.valid) {
+          return {
+            content: containmentPass,
+            retries: 2,
+            outsideDiffRatio: containmentValidation.outsideDiffRatio,
+          };
+        }
+      } catch (error) {
+        console.warn("outside-only 保底重試失敗:", error.message);
+      }
+    }
+
     throw buildGuardError(
       "OUTSIDE_DIFF_TOO_HIGH",
       "修改結果影響到選取範圍外內容，已拒收本次修改。",
       "請縮小選取範圍，或把修改指示寫得更聚焦。",
-      secondValidation,
+      {
+        ...secondValidation,
+        retries: 2,
+      },
     );
   } catch (error) {
     if (error?.status === 422) {
