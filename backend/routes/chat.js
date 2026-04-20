@@ -536,8 +536,8 @@ ${instruction}
     if (!isLikelySafeReplacement(selectedMarkdownSlice, replacementText)) {
       throw buildGuardError(
         "PATCH_TEXT_INVALID",
-        "修改片段疑似異常，已拒收本次修改。",
-        "請縮小選取範圍，或改用更聚焦的修改指示。",
+        "修改內容變化過大，系統已拒收此修改。",
+        "請試試：1) 選取更小的文段後重試，2) 提供更描述性的修改指示，或 3) 清除所有修改後重新開始。",
       );
     }
 
@@ -849,18 +849,33 @@ function isLikelySafeReplacement(originalSegment, replacementSegment) {
     return false;
   }
 
-  const originalLen = Math.max(1, original.length);
-  const replacementLen = replacement.length;
-  const ratio = replacementLen / originalLen;
+  // Allow empty original (inserting new content)
+  if (!original) {
+    return true;
+  }
 
-  if (ratio < 0.2 || ratio > 5) {
+  const originalLen = original.length;
+  const replacementLen = replacement.length;
+  
+  // More flexible ratio: allow complete rewrites (ratio > 5) and significant shortening (ratio < 0.1)
+  // This permits cases like:
+  // - Replacing "短" with "很長的新文本很長的新文本" (ratio > 5 OK)
+  // - Replacing "很長的原文本很長的原文本" with "短" (ratio < 0.1 OK)
+  // - But still prevent suspicious changes like deleting everything or adding nothing
+  const ratio = replacementLen / originalLen;
+  const lengthDelta = Math.abs(replacementLen - originalLen);
+  const maxDelta = Math.max(originalLen * 2, 200); // Allow big changes for short selections
+
+  // Reject only if the change is suspiciously extreme
+  if (lengthDelta > maxDelta && (ratio < 0.05 || ratio > 20)) {
     return false;
   }
 
+  // Check for code block syntax abuse (prevent injecting ```  to break formatting)
   const tripleBacktickDelta =
     (replacement.match(/```/g) || []).length -
     (original.match(/```/g) || []).length;
-  if (Math.abs(tripleBacktickDelta) > 1) {
+  if (Math.abs(tripleBacktickDelta) > 2) {
     return false;
   }
 
