@@ -5,41 +5,81 @@
 
   const AUTH_STORAGE_KEY = "lprAuthToken";
   const AUTH_USER_KEY = "lprAuthUser";
+  const memoryStorage = new Map();
   let googleAuthReadyPromise = null;
   let googleScriptPromise = null;
   let googleInitialized = false;
+
+  function getStorageValue(key) {
+    try {
+      const value = window.localStorage.getItem(key);
+      return value === null ? "" : value;
+    } catch (error) {
+      return memoryStorage.get(key) || "";
+    }
+  }
+
+  function setStorageValue(key, value) {
+    const normalizedValue = value === null || value === undefined ? "" : String(value);
+
+    if (!normalizedValue) {
+      memoryStorage.delete(key);
+      try {
+        window.localStorage.removeItem(key);
+      } catch (error) {
+        // Ignore storage access failures and fall back to memory.
+      }
+      return;
+    }
+
+    memoryStorage.set(key, normalizedValue);
+    try {
+      window.localStorage.setItem(key, normalizedValue);
+    } catch (error) {
+      // Ignore storage access failures and fall back to memory.
+    }
+  }
+
+  function removeStorageValue(key) {
+    memoryStorage.delete(key);
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      // Ignore storage access failures and fall back to memory.
+    }
+  }
 
   // ============================================
   // Token Management
   // ============================================
 
   function getAuthToken() {
-    return localStorage.getItem(AUTH_STORAGE_KEY);
+    return getStorageValue(AUTH_STORAGE_KEY);
   }
 
   function setAuthToken(token) {
     if (token) {
-      localStorage.setItem(AUTH_STORAGE_KEY, token);
+      setStorageValue(AUTH_STORAGE_KEY, token);
     } else {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
+      removeStorageValue(AUTH_STORAGE_KEY);
     }
   }
 
   function clearAuthToken() {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_USER_KEY);
+    removeStorageValue(AUTH_STORAGE_KEY);
+    removeStorageValue(AUTH_USER_KEY);
   }
 
   function setAuthUser(user) {
     if (user) {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      setStorageValue(AUTH_USER_KEY, JSON.stringify(user));
     } else {
-      localStorage.removeItem(AUTH_USER_KEY);
+      removeStorageValue(AUTH_USER_KEY);
     }
   }
 
   function getAuthUser() {
-    const userJson = localStorage.getItem(AUTH_USER_KEY);
+    const userJson = getStorageValue(AUTH_USER_KEY);
     try {
       return userJson ? JSON.parse(userJson) : null;
     } catch {

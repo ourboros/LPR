@@ -63,8 +63,8 @@
       );
 
       window.LPR.clearCurrentLesson();
-      sessionStorage.removeItem("chatSessionId");
-      sessionStorage.removeItem("reviewSessionId");
+      window.LPR?.removeSessionValue?.("chatSessionId", "lpr.chatSessionId");
+      window.LPR?.removeSessionValue?.("reviewSessionId", "lpr.reviewSessionId");
       navigateToUpload();
     } catch (error) {
       alert(`刪除失敗：${extractErrorMessage(error)}`);

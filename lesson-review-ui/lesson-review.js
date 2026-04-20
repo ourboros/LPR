@@ -15,6 +15,8 @@ const INITIAL_REVIEW_PROMPT =
   "請針對這份教案產生完整且正式的評論，包含總體評價、優點、缺點與具體修改建議。";
 const REGENERATE_REVIEW_PROMPT =
   "請重新生成這份教案的正式評論，並更強調結構完整性、評量設計與可操作的改進建議。";
+const REVIEW_SESSION_LEGACY_KEY = "lpr.reviewSessionId";
+const SIDEBAR_STATE_LEGACY_KEY = "lpr.sidebarCollapsed";
 
 let activeSelectionRange = null;
 let selectedOriginalText = "";
@@ -27,10 +29,127 @@ let selectedPlainContextBefore = "";
 let selectedPlainContextAfter = "";
 let selectedPlainTextSnapshot = "";
 let reviewHistory = [];
-let currentSessionId = sessionStorage.getItem(REVIEW_SESSION_KEY) || "";
+let currentSessionId = "";
 let isGenerating = false;
 let lastLoadedLessonId = null;
 const CONTEXT_WINDOW = 64;
+
+function getSessionValue(primaryKey, legacyKey) {
+  return window.LPR?.getSessionValue?.(primaryKey, legacyKey) || "";
+}
+
+function setSessionValue(primaryKey, legacyKey, value) {
+  window.LPR?.setSessionValue?.(primaryKey, legacyKey, value);
+}
+
+function removeSessionValue(primaryKey, legacyKey) {
+  window.LPR?.removeSessionValue?.(primaryKey, legacyKey);
+}
+
+function getLocalValue(primaryKey, legacyKey) {
+  return window.LPR?.getLocalValue?.(primaryKey, legacyKey) || "";
+}
+
+function setLocalValue(primaryKey, legacyKey, value) {
+  window.LPR?.setLocalValue?.(primaryKey, legacyKey, value);
+}
+
+function getReviewSessionId() {
+  return getSessionValue(REVIEW_SESSION_KEY, REVIEW_SESSION_LEGACY_KEY);
+}
+
+function setReviewSessionId(value) {
+  currentSessionId = value ? String(value) : "";
+  setSessionValue(REVIEW_SESSION_KEY, REVIEW_SESSION_LEGACY_KEY, currentSessionId);
+}
+
+function clearReviewSessionId() {
+  currentSessionId = "";
+  removeSessionValue(REVIEW_SESSION_KEY, REVIEW_SESSION_LEGACY_KEY);
+}
+
+function getSidebarCollapsedState() {
+  return window.LPR
+    ? window.LPR.getSidebarCollapsed()
+    : getLocalValue(SIDEBAR_STATE_KEY, SIDEBAR_STATE_LEGACY_KEY) === "true";
+}
+
+function setSidebarCollapsedState(isCollapsed) {
+  if (window.LPR?.setSidebarCollapsed) {
+    window.LPR.setSidebarCollapsed(isCollapsed);
+    return;
+  }
+
+  setLocalValue(
+    SIDEBAR_STATE_KEY,
+    SIDEBAR_STATE_LEGACY_KEY,
+    String(Boolean(isCollapsed)),
+  );
+}
+
+function resolveSelectedReviewBubble() {
+  if (selectedReviewBubble && selectedReviewBubble.isConnected) {
+    return selectedReviewBubble;
+  }
+
+  if (!selectedReviewId) {
+    return null;
+  }
+
+  return reviewResult.querySelector(
+    `.review-bubble[data-review-id="${selectedReviewId}"]`,
+  );
+}
+
+function refreshSelectedReviewContext() {
+  const reviewBubble = resolveSelectedReviewBubble();
+  if (!reviewBubble) {
+    return false;
+  }
+
+  selectedReviewBubble = reviewBubble;
+  selectedReviewId = reviewBubble.dataset.reviewId || selectedReviewId;
+  selectedFullComment = String(reviewBubble.dataset.rawMarkdown || "").trim();
+
+  if (!selectedFullComment) {
+    selectedFullComment = String(reviewBubble.textContent || "").trim();
+  }
+
+  return Boolean(selectedReviewId && selectedFullComment);
+}
+
+function buildEditorErrorMessage(error) {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (!error) {
+    return "修改失敗，請稍後再試。";
+  }
+
+  const parts = [];
+  if (error.message) {
+    parts.push(error.message);
+  }
+  if (error.code) {
+    parts.push(`代碼：${error.code}`);
+  }
+  if (error.hint) {
+    parts.push(`提示：${error.hint}`);
+  }
+
+  const details = error.details || {};
+  if (typeof details.candidateCount === "number") {
+    parts.push(`候選數量：${details.candidateCount}`);
+  }
+  if (typeof details.method === "string" && details.method) {
+    parts.push(`定位方式：${details.method}`);
+  }
+
+  return parts.length > 0 ? parts.join("\n") : "修改失敗，請稍後再試。";
+}
+
+currentSessionId = getReviewSessionId();
 
 function getRangeOffsetsWithinElement(element, range) {
   if (!element || !range) {
@@ -122,8 +241,7 @@ async function requestReview(message, options = {}) {
   if (clearExisting) {
     reviewResult.innerHTML = "";
     reviewHistory = [];
-    currentSessionId = "";
-    sessionStorage.removeItem(REVIEW_SESSION_KEY);
+    clearReviewSessionId();
   }
 
   if (!lessonId) {
@@ -149,11 +267,21 @@ async function requestReview(message, options = {}) {
 
     currentSessionId = data.sessionId || currentSessionId;
     if (currentSessionId) {
-      sessionStorage.setItem(REVIEW_SESSION_KEY, currentSessionId);
+      setReviewSessionId(currentSessionId);
     }
 
     const savedReviewId = data.reviewId || null;
-    createReviewBubble(data.content || "AI 未回傳評論內容。", savedReviewId);
+    const reviewContent = String(data.content || "").trim();
+
+    if (!savedReviewId) {
+      throw new Error("正式評論尚未成功建立可編輯紀錄，請重新生成");
+    }
+
+    if (!reviewContent) {
+      throw new Error("AI 未回傳評論內容");
+    }
+
+    createReviewBubble(reviewContent, savedReviewId);
 
     reviewHistory.push({
       role: "user",
@@ -162,7 +290,7 @@ async function requestReview(message, options = {}) {
     });
     reviewHistory.push({
       role: "assistant",
-      content: data.content || "",
+      content: reviewContent,
       reviewId: savedReviewId,
     });
   } catch (error) {
@@ -183,8 +311,7 @@ async function loadAndInjectFormalReviewHistory() {
   if (lastLoadedLessonId && lastLoadedLessonId !== lessonId) {
     reviewResult.innerHTML = "";
     reviewHistory = [];
-    currentSessionId = "";
-    sessionStorage.removeItem(REVIEW_SESSION_KEY);
+    clearReviewSessionId();
   }
 
   // 檢查 DOM 是否已有內容，若有則不重複加載（同一個教案）
@@ -268,7 +395,7 @@ function isSelectionInsideAiReview(range) {
     return false;
   }
 
-  return Boolean(anchorElement.closest(".review-bubble"));
+  return Boolean(anchorElement.closest(".review-bubble[data-review-id]"));
 }
 
 function positionCommentEditor(rangeRect) {
@@ -369,20 +496,13 @@ function handleReviewSelection() {
 }
 
 function applySidebarState() {
-  const isCollapsed = window.LPR
-    ? window.LPR.getSidebarCollapsed()
-    : localStorage.getItem(SIDEBAR_STATE_KEY) === "true";
+  const isCollapsed = getSidebarCollapsedState();
   pageShell.classList.toggle("sidebar-collapsed", isCollapsed);
 }
 
 function persistSidebarState() {
   const isCollapsed = pageShell.classList.contains("sidebar-collapsed");
-  if (window.LPR) {
-    window.LPR.setSidebarCollapsed(isCollapsed);
-    return;
-  }
-
-  localStorage.setItem(SIDEBAR_STATE_KEY, String(isCollapsed));
+  setSidebarCollapsedState(isCollapsed);
 }
 
 applySidebarState();
@@ -510,14 +630,16 @@ function setButtonLoading(button, isLoading) {
  * 顯示編輯器錯誤訊息
  */
 function showEditorError(message) {
+  const displayMessage = buildEditorErrorMessage(message);
+
   if (commentEditorError) {
-    commentEditorError.textContent = message;
+    commentEditorError.textContent = displayMessage;
     commentEditorError.hidden = false;
     setTimeout(() => {
       commentEditorError.hidden = true;
     }, 5000);
   } else {
-    alert(message);
+    alert(displayMessage);
   }
 }
 
@@ -539,7 +661,7 @@ commentEditorApply.addEventListener("click", async () => {
     return;
   }
 
-  if (!selectedReviewBubble || !selectedReviewId) {
+  if (!refreshSelectedReviewContext()) {
     showEditorError("找不到對應的評論紀錄，請重新選取後再試一次");
     return;
   }
@@ -605,7 +727,7 @@ commentEditorApply.addEventListener("click", async () => {
     hideCommentEditor();
   } catch (error) {
     console.error("修改評論失敗:", error);
-    showEditorError(`修改失敗：${error.message}`);
+    showEditorError(error);
   } finally {
     // 恢復按鈕狀態
     setButtonLoading(commentEditorApply, false);

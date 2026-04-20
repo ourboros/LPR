@@ -91,9 +91,14 @@ router.post("/", async (req, res) => {
       },
     );
 
+    const normalizedContent = String(response?.content || "").trim();
+    if (!normalizedContent) {
+      throw new Error("AI 回傳內容為空");
+    }
+
     // 更新對話歷史
     history.push({ role: "user", content: message });
-    history.push(response);
+    history.push({ ...response, content: normalizedContent });
     sessions.set(sid, history);
 
     const savedReview = await persistReviewRecord({
@@ -103,13 +108,18 @@ router.post("/", async (req, res) => {
       mode: normalizedMode,
       action: normalizedAction,
       userPrompt: message,
-      aiContent: response.content,
+      aiContent: normalizedContent,
       sources: response.sources,
     });
+
+    if (normalizedMode === "review-formal" && !savedReview) {
+      throw new Error("正式評論儲存失敗，請重新生成");
+    }
 
     // 回傳結果
     res.json({
       ...response,
+      content: normalizedContent,
       sessionId: sid,
       reviewId: savedReview?.reviewId || null,
     });

@@ -1,5 +1,6 @@
 (function initializeLprApi() {
   const DEFAULT_API_ORIGIN = "http://localhost:5000";
+  const memoryStorage = new Map();
   const STORAGE_KEYS = {
     currentLessonId: "currentLessonId",
     currentLessonName: "currentLessonName",
@@ -21,8 +22,77 @@
   }
 
   function clearLegacyGuestSessionKeys() {
-    localStorage.removeItem(STORAGE_KEYS.guestSessionId);
-    localStorage.removeItem(LEGACY_STORAGE_KEYS.guestSessionId);
+    removeLocalValue(STORAGE_KEYS.guestSessionId);
+    removeLocalValue(LEGACY_STORAGE_KEYS.guestSessionId);
+  }
+
+  function getStorageArea(isSessionStorage) {
+    try {
+      return isSessionStorage ? window.sessionStorage : window.localStorage;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function storageEntryKey(isSessionStorage, key) {
+    return `${isSessionStorage ? "session" : "local"}:${key}`;
+  }
+
+  function readStorageValue(isSessionStorage, key) {
+    const storage = getStorageArea(isSessionStorage);
+    if (storage) {
+      try {
+        const value = storage.getItem(key);
+        return value === null ? "" : value;
+      } catch (error) {
+        // Ignore storage access failures and fall back to memory.
+      }
+    }
+
+    return memoryStorage.get(storageEntryKey(isSessionStorage, key)) || "";
+  }
+
+  function writeStorageValue(isSessionStorage, key, value) {
+    const normalizedValue = value === null || value === undefined ? "" : String(value);
+    const storageKey = storageEntryKey(isSessionStorage, key);
+    const storage = getStorageArea(isSessionStorage);
+
+    if (!normalizedValue) {
+      memoryStorage.delete(storageKey);
+      if (storage) {
+        try {
+          storage.removeItem(key);
+        } catch (error) {
+          // Ignore storage access failures and fall back to memory.
+        }
+      }
+      return;
+    }
+
+    memoryStorage.set(storageKey, normalizedValue);
+    if (storage) {
+      try {
+        storage.setItem(key, normalizedValue);
+      } catch (error) {
+        // Ignore storage access failures and fall back to memory.
+      }
+    }
+  }
+
+  function removeStorageValue(isSessionStorage, key) {
+    const storageKey = storageEntryKey(isSessionStorage, key);
+    memoryStorage.delete(storageKey);
+
+    const storage = getStorageArea(isSessionStorage);
+    if (!storage) {
+      return;
+    }
+
+    try {
+      storage.removeItem(key);
+    } catch (error) {
+      // Ignore storage access failures and fall back to memory.
+    }
   }
 
   function resolveApiOrigin() {
@@ -48,29 +118,29 @@
 
   function getStoredValue(primaryKey, legacyKey) {
     if (isGuestSessionKey(primaryKey, legacyKey)) {
-      const primaryValue = sessionStorage.getItem(primaryKey);
-      if (primaryValue !== null) {
+      const primaryValue = readStorageValue(true, primaryKey);
+      if (primaryValue !== "") {
         return primaryValue;
       }
 
-      const legacyValue = sessionStorage.getItem(legacyKey);
-      if (legacyValue !== null) {
-        sessionStorage.setItem(primaryKey, legacyValue);
-        sessionStorage.removeItem(legacyKey);
+      const legacyValue = readStorageValue(true, legacyKey);
+      if (legacyValue !== "") {
+        writeStorageValue(true, primaryKey, legacyValue);
+        removeStorageValue(true, legacyKey);
         return legacyValue;
       }
 
       return "";
     }
 
-    const primaryValue = localStorage.getItem(primaryKey);
-    if (primaryValue !== null) {
+    const primaryValue = readStorageValue(false, primaryKey);
+    if (primaryValue !== "") {
       return primaryValue;
     }
 
-    const legacyValue = localStorage.getItem(legacyKey);
-    if (legacyValue !== null) {
-      localStorage.setItem(primaryKey, legacyValue);
+    const legacyValue = readStorageValue(false, legacyKey);
+    if (legacyValue !== "") {
+      writeStorageValue(false, primaryKey, legacyValue);
       return legacyValue;
     }
 
@@ -80,26 +150,47 @@
   function setStoredValue(primaryKey, legacyKey, value) {
     if (isGuestSessionKey(primaryKey, legacyKey)) {
       if (value === null || value === undefined || value === "") {
-        sessionStorage.removeItem(primaryKey);
-        sessionStorage.removeItem(legacyKey);
+        removeStorageValue(true, primaryKey);
+        removeStorageValue(true, legacyKey);
         clearLegacyGuestSessionKeys();
         return;
       }
 
-      sessionStorage.setItem(primaryKey, String(value));
-      sessionStorage.removeItem(legacyKey);
+      writeStorageValue(true, primaryKey, value);
+      removeStorageValue(true, legacyKey);
       clearLegacyGuestSessionKeys();
       return;
     }
 
     if (value === null || value === undefined || value === "") {
-      localStorage.removeItem(primaryKey);
-      localStorage.removeItem(legacyKey);
+      removeStorageValue(false, primaryKey);
+      removeStorageValue(false, legacyKey);
       return;
     }
 
-    localStorage.setItem(primaryKey, String(value));
-    localStorage.setItem(legacyKey, String(value));
+    writeStorageValue(false, primaryKey, value);
+    writeStorageValue(false, legacyKey, value);
+  }
+
+  function createApiError(message, response, payload) {
+    const error = new Error(message);
+    error.status = response.status;
+
+    if (payload && typeof payload === "object") {
+      if (typeof payload.code === "string" && payload.code) {
+        error.code = payload.code;
+      }
+
+      if (typeof payload.hint === "string" && payload.hint) {
+        error.hint = payload.hint;
+      }
+
+      if (payload.details && typeof payload.details === "object") {
+        error.details = payload.details;
+      }
+    }
+
+    return error;
   }
 
   async function parseResponse(response) {
@@ -118,7 +209,6 @@
 
     if (!response.ok) {
       let message = `HTTP ${response.status}`;
-      let detailSuffix = "";
 
       if (typeof payload === "string") {
         message = payload;
@@ -133,45 +223,10 @@
           message = JSON.stringify(payload);
         }
 
-        const parts = [];
-        if (typeof payload.code === "string" && payload.code) {
-          parts.push(`code=${payload.code}`);
-        }
-        if (typeof payload.hint === "string" && payload.hint) {
-          parts.push(`hint=${payload.hint}`);
-        }
-
-        const details = payload.details;
-        if (details && typeof details === "object") {
-          const ratio = Number(details.outsideDiffRatio);
-          const threshold = Number(details.outsideThreshold);
-          if (Number.isFinite(ratio) && Number.isFinite(threshold)) {
-            parts.push(
-              `outsideDiff=${ratio.toFixed(4)}/${threshold.toFixed(4)}`,
-            );
-          }
-          const anchoredRatio = Number(details.anchoredOutsideDiffRatio);
-          if (Number.isFinite(anchoredRatio)) {
-            parts.push(`anchored=${anchoredRatio.toFixed(4)}`);
-          }
-          const fallbackRatio = Number(details.fallbackOutsideDiffRatio);
-          if (Number.isFinite(fallbackRatio)) {
-            parts.push(`fallback=${fallbackRatio.toFixed(4)}`);
-          }
-          if (
-            typeof details.candidateSelectionMethod === "string" &&
-            details.candidateSelectionMethod
-          ) {
-            parts.push(`anchor=${details.candidateSelectionMethod}`);
-          }
-        }
-
-        if (parts.length > 0) {
-          detailSuffix = ` (${parts.join(" | ")})`;
-        }
+        throw createApiError(message, response, payload);
       }
 
-      throw new Error(`${message}${detailSuffix}`);
+      throw createApiError(message, response, payload);
     }
 
     return payload;
@@ -187,6 +242,26 @@
     API_BASE_URL,
     buildApiUrl(path) {
       return `${API_BASE_URL}${path}`;
+    },
+    getSessionValue(primaryKey, legacyKey) {
+      return getStoredValue(primaryKey, legacyKey);
+    },
+    setSessionValue(primaryKey, legacyKey, value) {
+      setStoredValue(primaryKey, legacyKey, value);
+    },
+    removeSessionValue(primaryKey, legacyKey) {
+      removeStorageValue(true, primaryKey);
+      removeStorageValue(true, legacyKey);
+    },
+    getLocalValue(primaryKey, legacyKey) {
+      return getStoredValue(primaryKey, legacyKey);
+    },
+    setLocalValue(primaryKey, legacyKey, value) {
+      setStoredValue(primaryKey, legacyKey, value);
+    },
+    removeLocalValue(primaryKey, legacyKey) {
+      removeStorageValue(false, primaryKey);
+      removeStorageValue(false, legacyKey);
     },
     async request(path, options = {}) {
       const requestOptions = { ...options };
