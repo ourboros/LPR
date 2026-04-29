@@ -648,57 +648,88 @@ function showEditorError(message) {
 }
 
 /**
- * 進階的文字 diff：基於選取位置精確標記修改部分
- * 只標記實際修改的段落，不會過度標記
+ * 查找兩個文本間的修改範圍
+ * 返回 { prefixLen, modifiedText, suffixLen }
  */
-function markModifiedText(oldText, newText, selectedStart = -1, selectedEnd = -1) {
+function findModificationRange(oldText, newText) {
   const oldStr = String(oldText || "");
   const newStr = String(newText || "");
-  
-  // 如果沒有提供選取位置，使用簡單的全文比對
-  if (selectedStart < 0 || selectedEnd <= selectedStart) {
-    // 尋找最短的不同前綴和後綴
-    let prefixLen = 0;
-    const minLen = Math.min(oldStr.length, newStr.length);
-    
-    while (prefixLen < minLen && oldStr[prefixLen] === newStr[prefixLen]) {
-      prefixLen++;
-    }
-    
-    let suffixLen = 0;
-    while (
-      suffixLen < minLen - prefixLen &&
-      oldStr[oldStr.length - 1 - suffixLen] === newStr[newStr.length - 1 - suffixLen]
-    ) {
-      suffixLen++;
-    }
-    
-    // 構建標記版本
-    const prefix = newStr.substring(0, prefixLen);
-    const suffix = newStr.substring(newStr.length - suffixLen);
-    const middle = newStr.substring(prefixLen, newStr.length - suffixLen);
-    
-    if (middle.trim() === "") {
-      return newStr; // 沒有真正的修改
-    }
-    
-    return (
-      prefix +
-      `<mark class="text-modified">${DOMPurify.sanitize(middle)}</mark>` +
-      suffix
-    );
+
+  // 找第一個不同的位置
+  let prefixLen = 0;
+  const minLen = Math.min(oldStr.length, newStr.length);
+
+  while (prefixLen < minLen && oldStr[prefixLen] === newStr[prefixLen]) {
+    prefixLen++;
   }
-  
-  // 基於選取位置的精確標記
-  const before = newStr.substring(0, selectedStart);
-  const modified = newStr.substring(selectedStart, selectedEnd);
-  const after = newStr.substring(selectedEnd);
-  
-  return (
-    before +
-    `<mark class="text-modified">${DOMPurify.sanitize(modified)}</mark>` +
-    after
+
+  // 找最後一個不同的位置
+  let oldSuffixLen = 0;
+  let newSuffixLen = 0;
+  let oldIdx = oldStr.length - 1;
+  let newIdx = newStr.length - 1;
+
+  while (
+    oldIdx >= prefixLen &&
+    newIdx >= prefixLen &&
+    oldStr[oldIdx] === newStr[newIdx]
+  ) {
+    oldIdx--;
+    newIdx--;
+    oldSuffixLen++;
+    newSuffixLen++;
+  }
+
+  // 提取修改部分
+  const modifiedStart = prefixLen;
+  const modifiedEnd = newStr.length - newSuffixLen;
+  const modifiedText = newStr.substring(modifiedStart, modifiedEnd);
+
+  return {
+    prefixLen,
+    modifiedStart,
+    modifiedEnd,
+    modifiedText,
+    oldSuffixLen,
+    newSuffixLen,
+  };
+}
+
+/**
+ * 在 DOM 元素中查找並標記包含指定文本的節點
+ * 使用深度優先搜索遍歷 DOM，找到文本節點並添加 <mark> 標籤
+ */
+function markTextInDOM(element, textToMark) {
+  if (!textToMark || textToMark.trim() === "") {
+    return;
+  }
+
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false,
   );
+
+  const nodesToReplace = [];
+  let node;
+
+  // 第一遍：收集需要替換的節點
+  while ((node = walker.nextNode())) {
+    if (node.textContent.includes(textToMark)) {
+      nodesToReplace.push(node);
+    }
+  }
+
+  // 第二遍：替換節點（避免在遍歷中修改 DOM）
+  nodesToReplace.forEach((textNode) => {
+    const html = textNode.parentElement.innerHTML;
+    const marked = html.replace(
+      new RegExp(`(${textToMark.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "g"),
+      `<mark class="text-modified">$1</mark>`,
+    );
+    textNode.parentElement.innerHTML = marked;
+  });
 }
 
 // ============================================
@@ -759,22 +790,28 @@ commentEditorApply.addEventListener("click", async () => {
 
     selectedReviewBubble.dataset.rawMarkdown = fullComment;
 
-    // 先用 markModifiedText 標記修改部分，然後進行渲染
-    const markedContent = markModifiedText(oldMarkdown, newMarkdown);
-
+    // 先進行 markdown 渲染（不標記），然後在 DOM 中查找並標記
     if (window.LPRMarkdown?.renderToContainer) {
-      // 使用標記後的內容進行 markdown 渲染
+      // 使用新內容進行 markdown 渲染
       window.LPRMarkdown.renderToContainer(
         selectedReviewBubble,
-        markedContent,
+        newMarkdown,
         {
           className: "markdown-content",
           emptyText: "AI 未回傳評論內容。",
         },
       );
+
+      // 渲染完成後，在 DOM 中查找並標記修改部分
+      // 計算修改範圍
+      const modRange = findModificationRange(oldMarkdown, newMarkdown);
+      if (modRange.modifiedText && modRange.modifiedText.trim() !== "") {
+        // 在 DOM 中標記修改的文本
+        markTextInDOM(selectedReviewBubble, modRange.modifiedText);
+      }
     } else {
-      // 如果沒有 markdown 渲染器，直接設置標記後的 HTML
-      selectedReviewBubble.innerHTML = DOMPurify.sanitize(markedContent);
+      // 如果沒有 markdown 渲染器，直接設置清潔版本
+      selectedReviewBubble.innerHTML = DOMPurify.sanitize(newMarkdown);
     }
 
     reviewHistory = reviewHistory.filter(
