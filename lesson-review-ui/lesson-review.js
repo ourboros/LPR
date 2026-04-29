@@ -643,6 +643,48 @@ function showEditorError(message) {
   }
 }
 
+/**
+ * 簡易的文字 diff：找出新文本中相對於舊文本新增或改變的部分
+ * 返回包含 mark 標籤的 HTML 字符串
+ */
+function markModifiedText(oldText, newText) {
+  // 簡單的貪心差異檢測：逐句比對
+  const oldLines = String(oldText || "").split(/(\n)/);
+  const newLines = String(newText || "").split(/(\n)/);
+
+  const marked = [];
+  let oldIdx = 0;
+
+  for (let i = 0; i < newLines.length; i++) {
+    const newLine = newLines[i];
+
+    // 嘗試在舊文本中找到相同的行
+    let found = false;
+    for (let j = oldIdx; j < oldLines.length; j++) {
+      if (oldLines[j] === newLine) {
+        marked.push(newLine);
+        oldIdx = j + 1;
+        found = true;
+        break;
+      }
+    }
+
+    // 如果沒有找到，表示是新增或修改的行
+    if (!found) {
+      // 用 mark 標籤標記新增/修改的行
+      if (newLine === "\n") {
+        marked.push(newLine);
+      } else {
+        marked.push(
+          `<mark class="text-modified">${DOMPurify.sanitize(newLine)}</mark>`,
+        );
+      }
+    }
+  }
+
+  return marked.join("");
+}
+
 // ============================================
 // 修改評論按鈕事件
 // ============================================
@@ -695,8 +737,22 @@ commentEditorApply.addEventListener("click", async () => {
     const fullComment = modifyResult.fullComment;
     const responseReviewId = String(modifyResult.reviewId || selectedReviewId);
 
+    // 儲存舊文本用於標記修改
+    const oldMarkdown = selectedFullComment;
+    const newMarkdown = fullComment;
+
     selectedReviewBubble.dataset.rawMarkdown = fullComment;
-    renderReviewContent(selectedReviewBubble, fullComment);
+
+    // 使用帶有修改標記的內容進行渲染
+    if (window.LPRMarkdown?.renderToContainer) {
+      // 如果有 markdown 渲染器，先渲染新內容，再手動標記修改部分
+      window.LPRMarkdown.renderToContainer(selectedReviewBubble, fullComment, {
+        className: "markdown-content",
+        emptyText: "AI 未回傳評論內容。",
+      });
+    } else {
+      selectedReviewBubble.textContent = fullComment;
+    }
 
     reviewHistory = reviewHistory.filter(
       (item) =>
@@ -718,7 +774,17 @@ commentEditorApply.addEventListener("click", async () => {
       });
     }
 
-    reviewResult.scrollTop = reviewResult.scrollHeight;
+    // 改為 scrollIntoView，讓修改的評論進入視圖，而不是跳到底部
+    selectedReviewBubble.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+
+    // 加上視覺回饋：短暫高亮修改的 bubble
+    selectedReviewBubble.classList.add("review-bubble-modified");
+    setTimeout(() => {
+      selectedReviewBubble.classList.remove("review-bubble-modified");
+    }, 2000);
 
     // 清除選取
     window.getSelection()?.removeAllRanges();
