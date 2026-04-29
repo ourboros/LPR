@@ -743,15 +743,18 @@ commentEditorApply.addEventListener("click", async () => {
 
     selectedReviewBubble.dataset.rawMarkdown = fullComment;
 
-    // 使用帶有修改標記的內容進行渲染
+    // 先用 markModifiedText 標記修改部分，然後進行渲染
+    const markedContent = markModifiedText(oldMarkdown, newMarkdown);
+    
     if (window.LPRMarkdown?.renderToContainer) {
-      // 如果有 markdown 渲染器，先渲染新內容，再手動標記修改部分
-      window.LPRMarkdown.renderToContainer(selectedReviewBubble, fullComment, {
+      // 使用標記後的內容進行 markdown 渲染
+      window.LPRMarkdown.renderToContainer(selectedReviewBubble, markedContent, {
         className: "markdown-content",
         emptyText: "AI 未回傳評論內容。",
       });
     } else {
-      selectedReviewBubble.textContent = fullComment;
+      // 如果沒有 markdown 渲染器，直接設置標記後的 HTML
+      selectedReviewBubble.innerHTML = DOMPurify.sanitize(markedContent);
     }
 
     reviewHistory = reviewHistory.filter(
