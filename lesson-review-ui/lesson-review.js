@@ -697,7 +697,7 @@ function findModificationRange(oldText, newText) {
 
 /**
  * 在 DOM 元素中查找並標記包含指定文本的節點
- * 使用深度優先搜索遍歷 DOM，找到文本節點並添加 <mark> 標籤
+ * 直接操作 DOM 而不是使用 innerHTML，確保 mark 標籤被正確保留
  */
 function markTextInDOM(element, textToMark) {
   if (!textToMark || textToMark.trim() === "") {
@@ -711,24 +711,51 @@ function markTextInDOM(element, textToMark) {
     false,
   );
 
-  const nodesToReplace = [];
+  const nodesToProcess = [];
   let node;
 
-  // 第一遍：收集需要替換的節點
+  // 第一遍：收集需要處理的節點
   while ((node = walker.nextNode())) {
     if (node.textContent.includes(textToMark)) {
-      nodesToReplace.push(node);
+      nodesToProcess.push(node);
     }
   }
 
-  // 第二遍：替換節點（避免在遍歷中修改 DOM）
-  nodesToReplace.forEach((textNode) => {
-    const html = textNode.parentElement.innerHTML;
-    const marked = html.replace(
-      new RegExp(`(${textToMark.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "g"),
-      `<mark class="text-modified">$1</mark>`,
-    );
-    textNode.parentElement.innerHTML = marked;
+  // 第二遍：在 DOM 中直接操作（避免使用 innerHTML）
+  nodesToProcess.forEach((textNode) => {
+    const fullText = textNode.textContent;
+    const index = fullText.indexOf(textToMark);
+
+    if (index === -1) {
+      return; // 文本不存在
+    }
+
+    // 分割文本為三部分：前、中、後
+    const beforeText = fullText.substring(0, index);
+    const markedText = textToMark;
+    const afterText = fullText.substring(index + textToMark.length);
+
+    // 創建新的 DOM 節點結構
+    const fragment = document.createDocumentFragment();
+
+    // 添加前部分（如果存在）
+    if (beforeText) {
+      fragment.appendChild(document.createTextNode(beforeText));
+    }
+
+    // 創建 mark 元素並添加中間部分
+    const markElement = document.createElement("mark");
+    markElement.className = "text-modified";
+    markElement.textContent = markedText;
+    fragment.appendChild(markElement);
+
+    // 添加後部分（如果存在）
+    if (afterText) {
+      fragment.appendChild(document.createTextNode(afterText));
+    }
+
+    // 替換原始文本節點
+    textNode.parentElement.replaceChild(fragment, textNode);
   });
 }
 
@@ -793,14 +820,10 @@ commentEditorApply.addEventListener("click", async () => {
     // 先進行 markdown 渲染（不標記），然後在 DOM 中查找並標記
     if (window.LPRMarkdown?.renderToContainer) {
       // 使用新內容進行 markdown 渲染
-      window.LPRMarkdown.renderToContainer(
-        selectedReviewBubble,
-        newMarkdown,
-        {
-          className: "markdown-content",
-          emptyText: "AI 未回傳評論內容。",
-        },
-      );
+      window.LPRMarkdown.renderToContainer(selectedReviewBubble, newMarkdown, {
+        className: "markdown-content",
+        emptyText: "AI 未回傳評論內容。",
+      });
 
       // 渲染完成後，在 DOM 中查找並標記修改部分
       // 計算修改範圍
