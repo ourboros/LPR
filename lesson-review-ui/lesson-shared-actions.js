@@ -26,6 +26,26 @@
     }
   }
 
+  async function handleReupload(event) {
+    event.preventDefault();
+
+    const targetButton = event.currentTarget;
+    if (!targetButton || targetButton.disabled) {
+      return;
+    }
+
+    // 加入確認對話框
+    const confirmed = window.confirm(
+      "現有的評論紀錄仍然保留。確定要重新上傳教案嗎？",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigateToUpload();
+  }
+
   async function handleDeleteHistory(event) {
     event.preventDefault();
 
@@ -81,7 +101,7 @@
           return;
         }
 
-        button.addEventListener("click", navigateToUpload);
+        button.addEventListener("click", handleReupload);
         button.dataset.boundReupload = "true";
       });
 

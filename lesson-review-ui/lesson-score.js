@@ -381,5 +381,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-resetBtn.addEventListener("click", resetAllScores);
+function handleResetBtn() {
+  const confirmed = window.confirm(
+    "確定要重置所有評分紀錄嗎？此操作無法復原。",
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  resetAllScores();
+}
+
+resetBtn.addEventListener("click", handleResetBtn);
 saveBtn.addEventListener("click", saveScores);

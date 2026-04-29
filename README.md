@@ -515,6 +515,55 @@ Gemini API (內容生成)
 - 後續提問 → 用戶消息始終顯示在右側，AI 回復顯示在左側
 - 不同教案切換 → 歷史記錄正確清空與重新加載
 
+### UI 改進（泡泡置中、圖示統一、捲動優化）(2026/04)
+
+1. **使用者泡泡垂直置中修正** 
+   - 改造 `.bubble-user` 為 flex 容器（`align-items: center`）
+   - 確保短訊息與長訊息都能垂直置中
+   - 對應文件：lesson-review-ui/styles.css
+   - 效果：單行訊息不再偏上或偏下，視覺更舒適。
+
+2. **Font Awesome 來源統一**
+   - 統一所有頁面使用 Font Awesome kit（ID: 632ceaca97）
+   - 移除 lesson-score.html 和 upload.html 的 CDN 來源
+   - 對應文件：lesson-review-ui/lesson-score.html、lesson-review-ui/upload.html
+   - 效果：icon 在各頁面外觀一致，不再因來源混用而出現細微差異。
+
+3. **AI 自由對話 icon 風格統一**
+   - 改 `fa-regular fa-message` 為 `fa-solid fa-message`（與其他導覽按鈕風格一致）
+   - 對應文件：lesson-review-ui/index.html、lesson-review-ui/lesson-review.html、lesson-review-ui/lesson-score.html
+   - 效果：導覽列視覺風格統一為 solid 風格。
+
+4. **評論修改後捲動與視覺回饋改進**
+   - 改 `reviewResult.scrollTop = scrollHeight` 為 `selectedReviewBubble.scrollIntoView()`
+   - 修改完成後修改的 bubble 會短暫高亮（加上邊框色與陰影）
+   - 新增 `.review-bubble-modified` 樣式進行 2 秒視覺回饋
+   - 對應文件：lesson-review-ui/lesson-review.js、lesson-review-ui/styles.css
+   - 效果：用户修改評論後能立即看到改動位置，而非被捲到底部。
+
+### 上傳流程優化 (2026/04)
+
+1. **上傳完成後直接進入教案評論頁**
+   - 改 `window.location.href = "./index.html"` 為 `"./lesson-review.html"`
+   - 對應文件：lesson-review-ui/upload.js（`finalizeUploadAndRedirect` 函數）
+   - 效果：上傳教案後用户直接進入評論頁面，流程更直觀。
+
+### 用户操作保護（確認對話框）(2026/04)
+
+1. **重新上傳時加入確認畫面**
+   - 在 `handleReupload` 中新增 `window.confirm()` 確認對話框
+   - 確認文案：「現有的評論紀錄仍然保留。確定要重新上傳教案嗎？」
+   - 用户取消時不進行導向
+   - 對應文件：lesson-review-ui/lesson-shared-actions.js
+   - 效果：防止誤觸導致無意中離開評論頁，提高操作謹慎度。
+
+2. **重置評分時加入確認畫面**
+   - 在 `handleResetBtn` 中新增 `window.confirm()` 確認對話框
+   - 確認文案：「確定要重置所有評分紀錄嗎？此操作無法復原。」
+   - 用户取消時不進行重置
+   - 對應文件：lesson-review-ui/lesson-score.js（新增 `handleResetBtn` 函數）
+   - 效果：防止用户誤觸而永久丟失評分紀錄。
+
 ---
 
 ## 15. 驗證清單（回歸測試）
