@@ -696,12 +696,84 @@ function findModificationRange(oldText, newText) {
 }
 
 /**
+ * 根據字符位置在 DOM 中精確標記修改部分
+ * 遍歷所有文本節點，根據累積字符位置找到修改範圍
+ */
+function markModifiedByPosition(element, startPos, endPos) {
+  if (startPos < 0 || endPos <= startPos) {
+    return false;
+  }
+
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false,
+  );
+
+  let currentPos = 0;
+  const nodesToMark = [];
+  let node;
+
+  // 第一遍：收集跨越修改範圍的節點
+  while ((node = walker.nextNode())) {
+    const nodeStart = currentPos;
+    const nodeEnd = currentPos + node.textContent.length;
+
+    // 檢查是否與修改範圍有重疊
+    if (nodeEnd > startPos && nodeStart < endPos) {
+      nodesToMark.push({
+        node,
+        nodeStart,
+        nodeEnd,
+        markStart: Math.max(0, startPos - nodeStart),
+        markEnd: Math.min(node.textContent.length, endPos - nodeStart),
+      });
+    }
+
+    currentPos = nodeEnd;
+  }
+
+  // 第二遍：標記節點（反向遍歷避免 DOM 修改影響）
+  for (let i = nodesToMark.length - 1; i >= 0; i--) {
+    const { node, markStart, markEnd } = nodesToMark[i];
+    const text = node.textContent;
+
+    // 分割文本
+    const beforeText = text.substring(0, markStart);
+    const markedText = text.substring(markStart, markEnd);
+    const afterText = text.substring(markEnd);
+
+    // 創建新節點
+    const fragment = document.createDocumentFragment();
+
+    if (beforeText) {
+      fragment.appendChild(document.createTextNode(beforeText));
+    }
+
+    const markElement = document.createElement("mark");
+    markElement.className = "text-modified";
+    markElement.textContent = markedText;
+    fragment.appendChild(markElement);
+
+    if (afterText) {
+      fragment.appendChild(document.createTextNode(afterText));
+    }
+
+    // 替換原始節點
+    node.parentElement.replaceChild(fragment, node);
+  }
+
+  return nodesToMark.length > 0;
+}
+
+/**
  * 在 DOM 元素中查找並標記包含指定文本的節點
- * 直接操作 DOM 而不是使用 innerHTML，確保 mark 標籤被正確保留
+ * 返回是否成功找到並標記了文本
  */
 function markTextInDOM(element, textToMark) {
   if (!textToMark || textToMark.trim() === "") {
-    return;
+    return false;
   }
 
   const walker = document.createTreeWalker(
@@ -713,11 +785,13 @@ function markTextInDOM(element, textToMark) {
 
   const nodesToProcess = [];
   let node;
+  let found = false;
 
   // 第一遍：收集需要處理的節點
   while ((node = walker.nextNode())) {
     if (node.textContent.includes(textToMark)) {
       nodesToProcess.push(node);
+      found = true;
     }
   }
 
@@ -757,6 +831,8 @@ function markTextInDOM(element, textToMark) {
     // 替換原始文本節點
     textNode.parentElement.replaceChild(fragment, textNode);
   });
+
+  return found;
 }
 
 // ============================================
@@ -817,6 +893,9 @@ commentEditorApply.addEventListener("click", async () => {
 
     selectedReviewBubble.dataset.rawMarkdown = fullComment;
 
+    // 計算修改範圍
+    const modRange = findModificationRange(oldMarkdown, newMarkdown);
+    
     // 先進行 markdown 渲染（不標記），然後在 DOM 中查找並標記
     if (window.LPRMarkdown?.renderToContainer) {
       // 使用新內容進行 markdown 渲染
@@ -825,12 +904,21 @@ commentEditorApply.addEventListener("click", async () => {
         emptyText: "AI 未回傳評論內容。",
       });
 
-      // 渲染完成後，在 DOM 中查找並標記修改部分
-      // 計算修改範圍
-      const modRange = findModificationRange(oldMarkdown, newMarkdown);
+      // 渲染完成後，使用多層策略標記修改部分
       if (modRange.modifiedText && modRange.modifiedText.trim() !== "") {
-        // 在 DOM 中標記修改的文本
-        markTextInDOM(selectedReviewBubble, modRange.modifiedText);
+        // 策略 1：直接文本搜索（針對簡單情況）
+        const marked1 = markTextInDOM(selectedReviewBubble, modRange.modifiedText);
+        
+        // 策略 2：如果直接搜索失敗，嘗試按字符位置標記
+        // 先把修改文字按行分割，逐行搜索
+        if (!marked1) {
+          const modifiedLines = modRange.modifiedText.split("\n");
+          for (const line of modifiedLines) {
+            if (line.trim()) {
+              markTextInDOM(selectedReviewBubble, line.trim());
+            }
+          }
+        }
       }
     } else {
       // 如果沒有 markdown 渲染器，直接設置清潔版本
