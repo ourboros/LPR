@@ -517,7 +517,7 @@ Gemini API (內容生成)
 
 ### UI 改進（泡泡置中、圖示統一、捲動優化）(2026/04)
 
-1. **使用者泡泡垂直置中修正** 
+1. **使用者泡泡垂直置中修正**
    - 改造 `.bubble-user` 為 flex 容器（`align-items: center`）
    - 確保短訊息與長訊息都能垂直置中
    - 對應文件：lesson-review-ui/styles.css
