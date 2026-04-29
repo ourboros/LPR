@@ -648,45 +648,57 @@ function showEditorError(message) {
 }
 
 /**
- * 簡易的文字 diff：找出新文本中相對於舊文本新增或改變的部分
- * 返回包含 mark 標籤的 HTML 字符串
+ * 進階的文字 diff：基於選取位置精確標記修改部分
+ * 只標記實際修改的段落，不會過度標記
  */
-function markModifiedText(oldText, newText) {
-  // 簡單的貪心差異檢測：逐句比對
-  const oldLines = String(oldText || "").split(/(\n)/);
-  const newLines = String(newText || "").split(/(\n)/);
-
-  const marked = [];
-  let oldIdx = 0;
-
-  for (let i = 0; i < newLines.length; i++) {
-    const newLine = newLines[i];
-
-    // 嘗試在舊文本中找到相同的行
-    let found = false;
-    for (let j = oldIdx; j < oldLines.length; j++) {
-      if (oldLines[j] === newLine) {
-        marked.push(newLine);
-        oldIdx = j + 1;
-        found = true;
-        break;
-      }
+function markModifiedText(oldText, newText, selectedStart = -1, selectedEnd = -1) {
+  const oldStr = String(oldText || "");
+  const newStr = String(newText || "");
+  
+  // 如果沒有提供選取位置，使用簡單的全文比對
+  if (selectedStart < 0 || selectedEnd <= selectedStart) {
+    // 尋找最短的不同前綴和後綴
+    let prefixLen = 0;
+    const minLen = Math.min(oldStr.length, newStr.length);
+    
+    while (prefixLen < minLen && oldStr[prefixLen] === newStr[prefixLen]) {
+      prefixLen++;
     }
-
-    // 如果沒有找到，表示是新增或修改的行
-    if (!found) {
-      // 用 mark 標籤標記新增/修改的行
-      if (newLine === "\n") {
-        marked.push(newLine);
-      } else {
-        marked.push(
-          `<mark class="text-modified">${DOMPurify.sanitize(newLine)}</mark>`,
-        );
-      }
+    
+    let suffixLen = 0;
+    while (
+      suffixLen < minLen - prefixLen &&
+      oldStr[oldStr.length - 1 - suffixLen] === newStr[newStr.length - 1 - suffixLen]
+    ) {
+      suffixLen++;
     }
+    
+    // 構建標記版本
+    const prefix = newStr.substring(0, prefixLen);
+    const suffix = newStr.substring(newStr.length - suffixLen);
+    const middle = newStr.substring(prefixLen, newStr.length - suffixLen);
+    
+    if (middle.trim() === "") {
+      return newStr; // 沒有真正的修改
+    }
+    
+    return (
+      prefix +
+      `<mark class="text-modified">${DOMPurify.sanitize(middle)}</mark>` +
+      suffix
+    );
   }
-
-  return marked.join("");
+  
+  // 基於選取位置的精確標記
+  const before = newStr.substring(0, selectedStart);
+  const modified = newStr.substring(selectedStart, selectedEnd);
+  const after = newStr.substring(selectedEnd);
+  
+  return (
+    before +
+    `<mark class="text-modified">${DOMPurify.sanitize(modified)}</mark>` +
+    after
+  );
 }
 
 // ============================================
@@ -790,12 +802,6 @@ commentEditorApply.addEventListener("click", async () => {
       behavior: "smooth",
       block: "nearest",
     });
-
-    // 加上視覺回饋：短暫高亮修改的 bubble
-    selectedReviewBubble.classList.add("review-bubble-modified");
-    setTimeout(() => {
-      selectedReviewBubble.classList.remove("review-bubble-modified");
-    }, 2000);
 
     // 清除選取
     window.getSelection()?.removeAllRanges();

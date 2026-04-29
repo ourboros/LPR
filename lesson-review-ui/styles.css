@@ -626,19 +626,13 @@ body:not(.auth-ui-ready) .nav-auth-block {
     box-shadow 0.3s ease;
 }
 
-/* 修改後的 bubble 高亮效果 */
-.review-bubble-modified {
-  border-color: var(--color-action);
-  box-shadow: 0 0 12px rgba(93, 93, 129, 0.3);
-}
-
 /* 修改過的文字標記樣式 */
 .text-modified {
-  background-color: #fff3cd;
-  padding: 2px 4px;
-  border-radius: 3px;
+  background-color: var(--color-action);
+  color: var(--color-page-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
   font-weight: 600;
-  color: var(--color-action);
 }
 
 .user-message {
