@@ -121,7 +121,7 @@ function finalizeUploadAndRedirect(result, statusMessage) {
 
   setStatus(statusMessage, "success");
   setTimeout(() => {
-    window.location.href = "./index.html";
+    window.location.href = "./lesson-review.html";
   }, 900);
 }
 
