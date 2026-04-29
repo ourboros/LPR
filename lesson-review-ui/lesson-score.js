@@ -384,20 +384,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 function handleResetBtn() {
   // 立即禁用按鈕，向用戶表示點擊已被註冊
   resetBtn.disabled = true;
-  
-  // 在下一個微任務中顯示確認對話框，讓瀏覽器有時間更新 UI
-  Promise.resolve().then(() => {
-    const confirmed = window.confirm(
-      "確定要重置所有評分紀錄嗎？此操作無法復原。",
-    );
 
-    if (confirmed) {
-      resetAllScores();
-    }
-  }).finally(() => {
-    // 確認完成後恢復按鈕
-    resetBtn.disabled = false;
-  });
+  // 在下一個微任務中顯示確認對話框，讓瀏覽器有時間更新 UI
+  Promise.resolve()
+    .then(() => {
+      const confirmed = window.confirm(
+        "確定要重置所有評分紀錄嗎？此操作無法復原。",
+      );
+
+      if (confirmed) {
+        resetAllScores();
+      }
+    })
+    .finally(() => {
+      // 確認完成後恢復按鈕
+      resetBtn.disabled = false;
+    });
 }
 
 resetBtn.addEventListener("click", handleResetBtn);
