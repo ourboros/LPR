@@ -59,12 +59,6 @@ body {
   color: var(--color-deep);
 }
 
-.upload-text {
-  margin: 0 0 30px 0;
-  color: var(--color-action);
-  font-size: 1.1rem;
-}
-
 .upload-zone {
   border: 2px dashed var(--color-soft);
   border-radius: 12px;
