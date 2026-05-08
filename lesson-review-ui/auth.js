@@ -369,7 +369,15 @@
       clearAuthToken();
       window.dispatchEvent(new CustomEvent("lpr:auth:logout"));
 
-      // 保持在目前頁面，由 UI 即時反映登入狀態
+      // ✅ 新增：登出後重定向到上傳頁面
+      const currentPage = window.location.pathname;
+      if (!currentPage.includes('upload.html')) {
+        console.info("[登出] 重定向到上傳頁面");
+        // 給事件處理一點時間完成
+        setTimeout(() => {
+          window.location.href = "/app/upload.html";
+        }, 200);
+      }
     }
   }
 
