@@ -135,6 +135,15 @@ class RAGSimpleService {
         criteriaContext,
       });
 
+      // ✅ 改進：添加詳細日誌用於診斷
+      console.info(`[RAG] 開始生成評論`, {
+        mode,
+        action,
+        maxChars,
+        lessonContentLength: lessonContent ? lessonContent.length : 0,
+        chatHistoryLength: chatHistory.length,
+      });
+
       // 呼叫 Gemini API
       const rawResponse = await geminiClient.generateResponse(
         fullPrompt,
@@ -155,6 +164,13 @@ class RAGSimpleService {
 
       const related = await this.findRelevantCriteria(userMessage);
 
+      console.info(`[RAG] 成功生成評論`, {
+        mode,
+        action,
+        contentLength: content.length,
+        relatedCriteria: related.length,
+      });
+
       return {
         role: "assistant",
         content,
@@ -162,8 +178,45 @@ class RAGSimpleService {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error("生成評論失敗:", error);
-      throw error;
+      // ✅ 改進：提供詳細的錯誤診斷信息
+      const errorMessage = error.message || "未知錯誤";
+      const errorDetails = {
+        message: errorMessage,
+        mode: options.mode,
+        action: options.action,
+        timestamp: new Date().toISOString(),
+      };
+
+      console.error("生成評論失敗:", errorDetails, error);
+
+      // ✅ 改進：區分不同的錯誤類型並提供合適的用戶消息
+      if (
+        errorMessage.includes("503") ||
+        errorMessage.includes("Service Unavailable")
+      ) {
+        const customError = new Error(errorMessage);
+        customError.statusCode = 503;
+        customError.userMessage =
+          "Google AI 服務目前負載過高，請稍後再試。系統已自動重試，如問題持續，請重新整理頁面重試。";
+        throw customError;
+      }
+
+      if (
+        errorMessage.includes("429") ||
+        errorMessage.includes("Too Many Requests")
+      ) {
+        const customError = new Error(errorMessage);
+        customError.statusCode = 429;
+        customError.userMessage = "請求過於頻繁，請等待幾秒鐘後再試";
+        throw customError;
+      }
+
+      // 其他錯誤
+      const customError = new Error(errorMessage);
+      customError.statusCode = 500;
+      customError.userMessage =
+        "生成評論失敗，請檢查教案內容是否完整，稍後再試。";
+      throw customError;
     }
   }
 

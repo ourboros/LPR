@@ -167,7 +167,34 @@ async function requestAssistantReply(message, options = {}) {
     chatHistory.push({ role: "assistant", content: data.content || "" });
   } catch (error) {
     loadingBubble.remove();
-    appendBubble(`系統錯誤：${error.message}`, "assistant");
+
+    // ✅ 改進：提供更好的錯誤消息
+    let errorMessage = error.message;
+    let userMessage = "系統錯誤";
+
+    // 根據錯誤類型提供用戶友好的消息
+    if (
+      errorMessage.includes("503") ||
+      errorMessage.includes("高需求") ||
+      errorMessage.includes("高負載")
+    ) {
+      userMessage =
+        "🔄 Google AI 服務目前負載過高\n\n系統已自動重試 3 次，如果問題持續：\n1. 請稍等 10-30 秒後重試\n2. 刷新頁面重新開始\n3. 如仍然無法使用，可能需要等待服務恢復";
+    } else if (errorMessage.includes("429") || errorMessage.includes("頻繁")) {
+      userMessage =
+        "⏱️ 請求過於頻繁\n\n請等待幾秒鐘後再提交新的問題，避免過於頻繁的請求。";
+    } else if (errorMessage.includes("教案內容")) {
+      userMessage =
+        "❌ 無法讀取教案\n\n請檢查教案是否完整上傳，重新整理後重試。";
+    } else if (errorMessage.includes("找不到")) {
+      userMessage =
+        "⚠️ 無法找到教案\n\n請確保已在上傳頁面正確選擇教案，然後重試。";
+    } else {
+      userMessage = `❌ ${errorMessage}\n\n請重新整理頁面後重試。`;
+    }
+
+    appendBubble(userMessage, "assistant");
+    console.error("[Chat Error]", error);
   }
 }
 

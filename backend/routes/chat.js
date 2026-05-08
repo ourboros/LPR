@@ -633,19 +633,36 @@ function handleAiRouteError(res, fallbackMessage, error) {
   }
 
   const message = String(error?.message || "未知錯誤");
-  const isQuotaError =
-    /配額|quota|429|rate limit|resource has been exhausted/i.test(message);
 
-  if (isQuotaError) {
-    return res.status(429).json({
-      error: fallbackMessage,
-      message: "AI API 配額已用盡，請稍後再試或更換可用 API 金鑰。",
+  // ✅ 改進：檢查 503 Service Unavailable 錯誤
+  if (/503|Service Unavailable|高需求/i.test(message)) {
+    return res.status(503).json({
+      error: "Google AI 服務目前負載過高",
+      message:
+        "系統已自動重試 3 次。請稍後再試，或稍等 10-30 秒後重新整理頁面。",
+      retryable: true,
     });
   }
 
+  // 配額和速率限制錯誤
+  const isQuotaError =
+    /配額|quota|429|rate limit|resource has been exhausted|頻繁/i.test(message);
+
+  if (isQuotaError) {
+    return res.status(429).json({
+      error: "請求過於頻繁",
+      message: "請等待幾秒鐘後再試，或檢查 API 配額設定。",
+      retryable: true,
+    });
+  }
+
+  // ✅ 改進：提供更多錯誤上下文
   return res.status(500).json({
     error: fallbackMessage,
-    message,
+    message: message || "未知錯誤",
+    statusCode: error?.statusCode || 500,
+    userMessage:
+      error?.userMessage || "處理您的請求時發生錯誤，請重新整理後重試。",
   });
 }
 
