@@ -239,6 +239,11 @@
         setAuthToken(result.token);
         setAuthUser(result.user);
 
+        // ✅ 新增：保存重定向標記
+        if (result.shouldRedirectToUpload) {
+          sessionStorage.setItem('loginRedirectToUpload', 'true');
+        }
+
         // 分派登入成功事件
         window.dispatchEvent(
           new CustomEvent("lpr:auth:success", { detail: result.user }),

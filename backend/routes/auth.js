@@ -22,7 +22,7 @@ router.post("/google-callback", async (req, res) => {
       });
     }
 
-    // ✅ 傳遞當前的 sessionId 以進行記錄遷移
+    // ✅ 傳遞當前的 sessionId 以進行記錄清理
     const result = await authService.handleGoogleLogin(
       googleToken,
       req.sessionId,
@@ -33,6 +33,7 @@ router.post("/google-callback", async (req, res) => {
       token: result.token,
       expiresIn: result.expiresIn,
       user: result.user,
+      shouldRedirectToUpload: result.shouldRedirectToUpload || false, // ✅ 新增
     });
   } catch (error) {
     console.error("Google 登入失敗:", error);
