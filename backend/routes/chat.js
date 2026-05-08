@@ -62,20 +62,53 @@ router.post("/", async (req, res) => {
     let lessonContent = null;
     if (safeSelectedSources.length > 0) {
       const lessonSections = [];
+      const failedSources = [];
 
       for (const sourceId of safeSelectedSources) {
         const lesson = await safeFindLessonById(sourceId, req);
         if (lesson) {
           lessonSections.push(`【${lesson.name}】\n${lesson.content}`);
+        } else {
+          failedSources.push(sourceId);
         }
       }
 
       lessonContent = lessonSections.join("\n\n");
+
+      // ✅ 改進：添加詳細的診斷日誌
+      if (failedSources.length > 0) {
+        console.warn(`[Chat API] 部分教案查詢失敗 - 找不到教案`, {
+          requestedSources: safeSelectedSources,
+          foundSources: safeSelectedSources.length - failedSources.length,
+          failedSources,
+          userId: req.user?.id || null,
+          sessionId: req.sessionId || null,
+          mode: normalizedMode,
+        });
+      }
+    } else {
+      console.warn(`[Chat API] selectedSources 為空`, {
+        requestBody: req.body,
+      });
     }
 
+    // ✅ 改進：mode 為 summary 但找不到內容時，返回更詳細的錯誤
     if (normalizedMode === "summary" && !lessonContent) {
+      console.error(`[Chat API] 無法生成摘要 - 找不到教案內容`, {
+        mode: normalizedMode,
+        selectedSources: safeSelectedSources,
+        userId: req.user?.id,
+        sessionId: req.sessionId,
+      });
+
       return res.status(400).json({
-        error: "找不到可用的教案內容，請重新選擇教案後再試一次",
+        error: "找不到可用的教案內容",
+        message: "請確保已上傳教案並在上傳頁面選擇教案後再進行分析",
+        details: {
+          selectedSources: safeSelectedSources,
+          hasUser: !!req.user?.id,
+          hasSessionId: !!req.sessionId,
+        },
       });
     }
 

@@ -282,11 +282,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   const hasHistory = await loadAndInjectHistoryChat();
 
   if (!hasHistory) {
-    await requestAssistantReply("請生成教案摘要", {
-      showUser: false,
-      mode: "summary",
-      action: "summary",
-      maxChars: 500,
-    });
+    try {
+      // ✅ 改進：添加錯誤處理，避免初始化失敗導致頁面崩潰
+      await requestAssistantReply("請生成教案摘要", {
+        showUser: false,
+        mode: "summary",
+        action: "summary",
+        maxChars: 500,
+      });
+    } catch (error) {
+      console.error("[初始化] 生成摘要失敗，允許用戶手動操作:", error);
+      appendSystemMessage(
+        "AI 摘要生成失敗，您可手動提問或點擊下方快速按鈕重新嘗試。",
+      );
+    }
   }
 });
