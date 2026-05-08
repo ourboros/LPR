@@ -85,15 +85,21 @@ function signToken(user) {
 /**
  * 完整的 Google OAuth 登入流程
  * @param {string} googleToken - Google 返回的 ID token
+ * @param {string} guestSessionId - 未登入時的 sessionId，用於遷移舊記錄
  * @returns {Promise<Object>} { token, user }
  */
-async function handleGoogleLogin(googleToken) {
+async function handleGoogleLogin(googleToken, guestSessionId = null) {
   try {
     // 1. 驗證 Google token
     const googleData = await verifyGoogleToken(googleToken);
 
     // 2. 創建或更新用戶
     const user = await upsertUser(googleData);
+
+    // ✅ 新增：遷移舊的 sessionId 記錄到 userId
+    if (guestSessionId) {
+      await migrateSessionRecordsToUser(guestSessionId, user._id);
+    }
 
     // 3. 簽發 JWT token
     const { token, expiresIn } = signToken(user);
@@ -143,6 +149,70 @@ async function refreshToken(user) {
     return signToken(dbUser);
   } catch (error) {
     throw error;
+  }
+}
+
+/**
+ * ✅ SessionID 遷移函數
+ * 當用戶登入時，將未登入期間（使用 sessionId）的評論記錄遷移到已登入用戶（使用 userId）
+ * @param {string} sessionId - 未登入時的 sessionId
+ * @param {string} userId - 登入後的 userId
+ */
+async function migrateSessionRecordsToUser(sessionId, userId) {
+  try {
+    const ReviewRecord = require("../models/ReviewRecord");
+
+    // 1. 查找舊的 sessionId 記錄
+    const oldRecords = await ReviewRecord.find({
+      sessionId: sessionId,
+      userId: null, // 只遷移未登入時的記錄
+    });
+
+    if (oldRecords.length === 0) {
+      console.info(
+        `[SessionID 遷移] 未找到 sessionId=${sessionId} 的記錄，跳過遷移`,
+      );
+      return { migrated: 0, deleted: 0 };
+    }
+
+    console.info(
+      `[SessionID 遷移] 發現 ${oldRecords.length} 條舊記錄，開始遷移...`,
+      {
+        sessionId,
+        userId,
+      },
+    );
+
+    // 2. 遷移記錄：清除 sessionId，設置 userId
+    const updateResult = await ReviewRecord.updateMany(
+      {
+        sessionId: sessionId,
+        userId: null,
+      },
+      {
+        $set: {
+          userId: userId,
+          sessionId: null, // ✅ 清除 sessionId，實現登入後的隔離
+          migratedAt: new Date(),
+          previousSessionId: sessionId, // ✅ 保留來源 sessionId 用於追蹤
+        },
+      },
+    );
+
+    console.info(`[SessionID 遷移] 完成`, {
+      sessionId,
+      userId,
+      migratedCount: updateResult.modifiedCount,
+    });
+
+    return {
+      migrated: updateResult.modifiedCount,
+      deleted: 0,
+    };
+  } catch (error) {
+    // ✅ 遷移失敗不影響登入流程
+    console.error("[SessionID 遷移] 失敗:", error.message);
+    return { migrated: 0, deleted: 0 };
   }
 }
 

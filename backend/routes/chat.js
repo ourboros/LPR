@@ -112,8 +112,13 @@ router.post("/", async (req, res) => {
       sources: response.sources,
     });
 
+    // ✅ 方案三：即使保存失敗也返回結果，不阻止用戶
     if (normalizedMode === "review-formal" && !savedReview) {
-      throw new Error("正式評論儲存失敗，請重新生成");
+      console.warn("正式評論記錄保存失敗，但評論內容已生成", {
+        mode: normalizedMode,
+        action: normalizedAction,
+      });
+      // 不再拋出錯誤，繼續執行
     }
 
     // 回傳結果
@@ -713,24 +718,40 @@ async function safeFindLessonById(rawLessonId, req) {
 
 async function persistReviewRecord(payload = {}) {
   try {
-    const lessonId = normalizeLessonId(payload.lessonId);
-    if (!lessonId || !payload.aiContent) {
+    // ✅ 方案三：檢查必要的內容，即使沒有 lessonId 也繼續
+    if (!payload.aiContent) {
       return null;
     }
 
-    const lesson = await findLessonById(lessonId, {
-      user: payload.userId ? { id: payload.userId } : null,
-      sessionId: payload.sessionId || null,
-    });
-    if (!lesson) {
-      return;
+    const lessonId = normalizeLessonId(payload.lessonId);
+
+    // ✅ 方案一：修復對象結構 - 創建符合期望的 mockReq 對象
+    let lesson = null;
+    if (lessonId) {
+      const mockReq = {
+        user: payload.userId ? { id: payload.userId } : null,
+        sessionId: payload.sessionId || null,
+      };
+
+      lesson = await findLessonById(lessonId, mockReq);
+
+      // ✅ 方案三：添加詳細日誌用於診斷
+      if (!lesson) {
+        console.warn("評論記錄查詢教案失敗，將創建無關聯的評論記錄:", {
+          lessonId,
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+        });
+      }
     }
 
     const reviewId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+
+    // ✅ 方案三：容錯邏輯 - 即使教案查詢失敗也保存記錄
     return await ReviewRecord.create({
       reviewId,
-      lessonId,
-      contentHash: lesson.contentHash || "",
+      lessonId: lesson?.lessonId || lessonId || null, // 使用查詢結果或傳入的 ID
+      contentHash: lesson?.contentHash || "",
       sessionId: payload.sessionId || null,
       userId: payload.userId || null,
       mode: payload.mode || "chat-free",
@@ -743,7 +764,8 @@ async function persistReviewRecord(payload = {}) {
       createdAt: new Date(),
     });
   } catch (error) {
-    console.warn("儲存評論紀錄失敗，略過不影響主流程:", error.message);
+    console.error("儲存評論紀錄失敗:", error.message);
+    // ✅ 方案三：保存失敗返回 null，不拋出異常
     return null;
   }
 }
@@ -856,7 +878,7 @@ function isLikelySafeReplacement(originalSegment, replacementSegment) {
 
   const originalLen = original.length;
   const replacementLen = replacement.length;
-  
+
   // More flexible ratio: allow complete rewrites (ratio > 5) and significant shortening (ratio < 0.1)
   // This permits cases like:
   // - Replacing "短" with "很長的新文本很長的新文本" (ratio > 5 OK)

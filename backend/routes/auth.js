@@ -22,7 +22,11 @@ router.post("/google-callback", async (req, res) => {
       });
     }
 
-    const result = await authService.handleGoogleLogin(googleToken);
+    // ✅ 傳遞當前的 sessionId 以進行記錄遷移
+    const result = await authService.handleGoogleLogin(
+      googleToken,
+      req.sessionId,
+    );
 
     res.json({
       success: true,

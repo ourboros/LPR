@@ -45,6 +45,17 @@ const reviewRecordSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // ✅ SessionID 遷移追蹤
+    migratedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    previousSessionId: {
+      type: String,
+      default: null,
+      index: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
