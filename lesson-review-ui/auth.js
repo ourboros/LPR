@@ -371,7 +371,7 @@
 
       // ✅ 新增：登出後重定向到上傳頁面
       const currentPage = window.location.pathname;
-      if (!currentPage.includes('upload.html')) {
+      if (!currentPage.includes("upload.html")) {
         console.info("[登出] 重定向到上傳頁面");
         // 給事件處理一點時間完成
         setTimeout(() => {
