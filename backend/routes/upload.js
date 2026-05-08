@@ -553,7 +553,8 @@ router.post(
       }
 
       if (action === "clear-history" && previousLessonIds.length > 0) {
-        await Promise.all([
+        // ✅ 改進：同時刪除 Score、ReviewRecord 和 Lesson 記錄
+        const deleteResults = await Promise.all([
           Score.deleteMany({
             ...buildRecordScopeFilter(req),
             lessonId: { $in: previousLessonIds },
@@ -562,7 +563,20 @@ router.post(
             ...buildRecordScopeFilter(req),
             lessonId: { $in: previousLessonIds },
           }),
+          // ✅ 新增：刪除舊的 Lesson 記錄
+          Lesson.deleteMany({
+            ...buildLessonScopeFilter(req),
+            lessonId: { $in: previousLessonIds },
+          }),
         ]);
+
+        console.info(`[清除教案] 已刪除舊教案及相關記錄`, {
+          action,
+          previousLessonIds,
+          deletedScores: deleteResults[0].deletedCount,
+          deletedReviews: deleteResults[1].deletedCount,
+          deletedLessons: deleteResults[2].deletedCount,
+        });
 
         targetLesson = lesson;
       }
