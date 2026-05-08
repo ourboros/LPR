@@ -230,26 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("lpr:auth:success", (event) => {
     const userName = event.detail?.name || "使用者";
-    
-    // ✅ 新增：檢查是否需要重定向到上傳介面
-    if (sessionStorage.getItem('loginRedirectToUpload') === 'true') {
-      sessionStorage.removeItem('loginRedirectToUpload');
-      
-      // 清空所有本地狀態
-      window.LPR.clearCurrentLesson?.();
-      localStorage.removeItem('lpr_current_lesson_id');
-      
-      // 清空表單
-      if (fileInput) fileInput.value = '';
-      if (fileName) {
-        fileName.textContent = '';
-        fileName.classList.remove('show');
-      }
-      
-      setStatus('舊教案已清理，請重新上傳教案', 'info');
-    } else {
-      setStatus(`✓ 已登入：${userName}`, "success");
-    }
+    setStatus(`✓ 已登入：${userName}`, "success");
   });
 
   window.addEventListener("lpr:auth:error", (event) => {

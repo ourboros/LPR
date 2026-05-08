@@ -20,7 +20,8 @@
   }
 
   function setStorageValue(key, value) {
-    const normalizedValue = value === null || value === undefined ? "" : String(value);
+    const normalizedValue =
+      value === null || value === undefined ? "" : String(value);
 
     if (!normalizedValue) {
       memoryStorage.delete(key);
@@ -239,17 +240,52 @@
         setAuthToken(result.token);
         setAuthUser(result.user);
 
-        // ✅ 新增：保存重定向標記
+        // ✅ 新增：如果需要重定向，直接跳轉到上傳頁面
         if (result.shouldRedirectToUpload) {
-          sessionStorage.setItem('loginRedirectToUpload', 'true');
+          // 清空所有本地狀態
+          try {
+            // 方式1：使用 window.LPR 的方法（如果已加載）
+            if (window.LPR?.clearCurrentLesson) {
+              window.LPR.clearCurrentLesson();
+            }
+          } catch (e) {
+            console.warn("[登入清理] LPR 清理失敗，嘗試手動清理:", e.message);
+          }
+
+          // 方式2：手動清理所有相關 localStorage/sessionStorage
+          try {
+            // 清空教案相關資訊
+            localStorage.removeItem("currentLessonId");
+            localStorage.removeItem("lpr.currentLessonId");
+            localStorage.removeItem("lpr_current_lesson_id");
+            localStorage.removeItem("currentLessonName");
+            localStorage.removeItem("lpr.currentLessonName");
+
+            // 清空 guestSessionId（已登入不需要）
+            localStorage.removeItem("guestSessionId");
+            localStorage.removeItem("lpr.guestSessionId");
+            localStorage.removeItem("lpr_session_id");
+
+            // 清空 sessionStorage 中的教案信息
+            sessionStorage.removeItem("currentLessonId");
+            sessionStorage.removeItem("lpr.currentLessonId");
+            sessionStorage.removeItem("currentLessonName");
+            sessionStorage.removeItem("lpr.currentLessonName");
+          } catch (e) {
+            console.warn("[登入清理] Storage 清理失敗:", e.message);
+          }
+
+          console.info("[登入清理] 完成，跳轉到上傳頁面");
+
+          // 直接跳轉到上傳頁面
+          window.location.href = "/app/upload.html";
+          return;
         }
 
-        // 分派登入成功事件
+        // 分派登入成功事件（不需要重定向時）
         window.dispatchEvent(
           new CustomEvent("lpr:auth:success", { detail: result.user }),
         );
-
-        // 由目前頁面直接更新登入狀態，不再跳轉到其他頁面
       }
     } catch (error) {
       console.error("Google 登入失敗:", error);

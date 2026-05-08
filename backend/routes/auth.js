@@ -11,38 +11,42 @@ const {
  * 處理 Google OAuth 回調
  * 期望 body: { googleToken: "..." }
  */
-router.post("/google-callback", async (req, res) => {
-  try {
-    const { googleToken } = req.body;
+router.post(
+  "/google-callback",
+  verifyTokenMiddleware({ allowGuest: true }),
+  async (req, res) => {
+    try {
+      const { googleToken } = req.body;
 
-    if (!googleToken) {
-      return res.status(400).json({
-        error: "缺少 googleToken",
-        message: "請提供 Google ID token",
+      if (!googleToken) {
+        return res.status(400).json({
+          error: "缺少 googleToken",
+          message: "請提供 Google ID token",
+        });
+      }
+
+      // ✅ 傳遞當前的 sessionId 以進行記錄清理
+      const result = await authService.handleGoogleLogin(
+        googleToken,
+        req.sessionId,
+      );
+
+      res.json({
+        success: true,
+        token: result.token,
+        expiresIn: result.expiresIn,
+        user: result.user,
+        shouldRedirectToUpload: result.shouldRedirectToUpload || false, // ✅ 新增
+      });
+    } catch (error) {
+      console.error("Google 登入失敗:", error);
+      res.status(401).json({
+        error: "Google 登入失敗",
+        message: error.message,
       });
     }
-
-    // ✅ 傳遞當前的 sessionId 以進行記錄清理
-    const result = await authService.handleGoogleLogin(
-      googleToken,
-      req.sessionId,
-    );
-
-    res.json({
-      success: true,
-      token: result.token,
-      expiresIn: result.expiresIn,
-      user: result.user,
-      shouldRedirectToUpload: result.shouldRedirectToUpload || false, // ✅ 新增
-    });
-  } catch (error) {
-    console.error("Google 登入失敗:", error);
-    res.status(401).json({
-      error: "Google 登入失敗",
-      message: error.message,
-    });
-  }
-});
+  },
+);
 
 /**
  * GET /api/auth/user
