@@ -8,6 +8,10 @@ const commentEditorCancel = document.getElementById("commentEditorCancel");
 const commentEditorApply = document.getElementById("commentEditorApply");
 const originalTextDisplay = document.getElementById("originalTextDisplay");
 const commentEditorError = document.getElementById("commentEditorError");
+const selectionMenu = document.getElementById("selectionMenu");
+const selectionMenuText = document.getElementById("selectionMenuText");
+const addToScoreBtn = document.getElementById("addToScoreBtn");
+const editCommentBtn = document.getElementById("editCommentBtn");
 const SIDEBAR_STATE_KEY = "lpr.sidebarCollapsed";
 const EDITOR_GAP = 10;
 const REVIEW_SESSION_KEY = "reviewSessionId";
@@ -385,6 +389,61 @@ function hideCommentEditor() {
   selectedPlainTextSnapshot = "";
 }
 
+function hideSelectionMenu() {
+  if (!selectionMenu) {
+    return;
+  }
+  selectionMenu.hidden = true;
+}
+
+function showSelectionMenu(text, rangeRect) {
+  if (!selectionMenu) {
+    return;
+  }
+
+  // 更新菜單文本
+  if (selectionMenuText) {
+    const displayText = text.length > 50 ? text.substring(0, 50) + "..." : text;
+    selectionMenuText.textContent = displayText;
+  }
+
+  // 定位菜單
+  positionSelectionMenu(rangeRect);
+  selectionMenu.hidden = false;
+}
+
+function positionSelectionMenu(rangeRect) {
+  if (!selectionMenu) {
+    return;
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  // 先顯示以獲得實際高度
+  selectionMenu.hidden = false;
+  const menuRect = selectionMenu.getBoundingClientRect();
+  const menuWidth = menuRect.width;
+  const menuHeight = menuRect.height;
+
+  // 計算最佳位置
+  let left = rangeRect.left + (rangeRect.width - menuWidth) / 2;
+  left = Math.max(12, Math.min(left, viewportWidth - menuWidth - 12));
+
+  let top;
+  const isInLowerHalf = rangeRect.top > viewportHeight / 2;
+  if (isInLowerHalf) {
+    top = rangeRect.top - menuHeight - 8;
+  } else {
+    top = rangeRect.bottom + 8;
+  }
+
+  top = Math.max(12, Math.min(top, viewportHeight - menuHeight - 12));
+
+  selectionMenu.style.left = `${left}px`;
+  selectionMenu.style.top = `${top}px`;
+}
+
 function isSelectionInsideAiReview(range) {
   if (!range) {
     return false;
@@ -436,20 +495,20 @@ function positionCommentEditor(rangeRect) {
 function handleReviewSelection() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) {
-    hideCommentEditor();
+    hideSelectionMenu();
     return;
   }
 
   const rawText = selection.toString();
   const text = rawText.trim();
   if (!text) {
-    hideCommentEditor();
+    hideSelectionMenu();
     return;
   }
 
   const selectedRange = selection.getRangeAt(0);
   if (!isSelectionInsideAiReview(selectedRange)) {
-    hideCommentEditor();
+    hideSelectionMenu();
     return;
   }
 
@@ -484,19 +543,9 @@ function handleReviewSelection() {
   selectedPlainContextBefore = selectionContext.before;
   selectedPlainContextAfter = selectionContext.after;
 
-  // 顯示原始文字在編輯器中
-  if (originalTextDisplay) {
-    // 截斷過長的文字
-    const displayText =
-      text.length > 100 ? text.substring(0, 100) + "..." : text;
-    originalTextDisplay.textContent = displayText;
-  }
-
-  // 清空輸入框，讓用戶輸入修改指示
-  commentEditorInput.value = "";
-
+  // ✅ 改進：顯示選擇菜單而非直接開啟編輯器
   const rangeRect = selectedRange.getBoundingClientRect();
-  positionCommentEditor(rangeRect);
+  showSelectionMenu(text, rangeRect);
 }
 
 function applySidebarState() {
@@ -547,6 +596,86 @@ regenerateBtn.addEventListener("click", async () => {
   regenerateBtn.disabled = false;
   regenerateBtn.innerHTML =
     '<i class="fa-solid fa-rotate-right"></i> 重新生成評論';
+});
+
+// 匯出評論 PDF 按鈕
+const exportReviewBtn = document.getElementById("exportReviewBtn");
+if (exportReviewBtn) {
+  exportReviewBtn.addEventListener("click", async () => {
+    const reviewContent = reviewResult.innerHTML;
+    if (!reviewContent || reviewContent.trim() === "") {
+      alert("尚無評論內容可匯出");
+      return;
+    }
+
+    exportReviewBtn.disabled = true;
+    try {
+      const lessonId = window.LPR?.getCurrentLessonId();
+      const title = lessonId ? `教案評論-${lessonId}` : "教案評論";
+      await window.PDFExporter.exportReviewContent(title, reviewContent);
+    } catch (error) {
+      console.error("匯出評論 PDF 失敗:", error);
+      alert("匯出 PDF 失敗，請稍後重試");
+    } finally {
+      exportReviewBtn.disabled = false;
+    }
+  });
+}
+
+// ============================================
+// 文字選擇菜單事件處理
+// ============================================
+
+if (addToScoreBtn) {
+  addToScoreBtn.addEventListener("click", async () => {
+    if (!selectedOriginalText || selectedOriginalText.trim() === "") {
+      alert("尚未選擇評論文字");
+      hideSelectionMenu();
+      return;
+    }
+
+    // ✅ 新增：將選取的文字複製並傳遞到評分頁面
+    const selectedText = selectedOriginalText.trim();
+
+    // 儲存到 sessionStorage，供 lesson-score.html 使用
+    sessionStorage.setItem("selectedReviewText", selectedText);
+
+    // 導航到評分頁面
+    window.location.href = "./lesson-score.html";
+  });
+}
+
+if (editCommentBtn) {
+  editCommentBtn.addEventListener("click", () => {
+    // 隱藏選擇菜單
+    hideSelectionMenu();
+
+    // 顯示評論編輯器（原有的行為）
+    if (originalTextDisplay) {
+      const displayText =
+        selectedOriginalText.length > 100
+          ? selectedOriginalText.substring(0, 100) + "..."
+          : selectedOriginalText;
+      originalTextDisplay.textContent = displayText;
+    }
+
+    // 清空輸入框
+    commentEditorInput.value = "";
+
+    // 定位並顯示編輯器
+    const rangeRect = activeSelectionRange?.getBoundingClientRect();
+    if (rangeRect) {
+      positionCommentEditor(rangeRect);
+    }
+  });
+}
+
+// 點擊頁面其他位置時隱藏菜單
+document.addEventListener("click", (e) => {
+  // 如果點擊的不是菜單或評論區域，則隱藏菜單
+  if (!selectionMenu?.contains(e.target) && !reviewResult?.contains(e.target)) {
+    hideSelectionMenu();
+  }
 });
 
 reviewResult.addEventListener("mouseup", () => {
@@ -895,7 +1024,7 @@ commentEditorApply.addEventListener("click", async () => {
 
     // 計算修改範圍
     const modRange = findModificationRange(oldMarkdown, newMarkdown);
-    
+
     // 先進行 markdown 渲染（不標記），然後在 DOM 中查找並標記
     if (window.LPRMarkdown?.renderToContainer) {
       // 使用新內容進行 markdown 渲染
@@ -907,8 +1036,11 @@ commentEditorApply.addEventListener("click", async () => {
       // 渲染完成後，使用多層策略標記修改部分
       if (modRange.modifiedText && modRange.modifiedText.trim() !== "") {
         // 策略 1：直接文本搜索（針對簡單情況）
-        const marked1 = markTextInDOM(selectedReviewBubble, modRange.modifiedText);
-        
+        const marked1 = markTextInDOM(
+          selectedReviewBubble,
+          modRange.modifiedText,
+        );
+
         // 策略 2：如果直接搜索失敗，嘗試按字符位置標記
         // 先把修改文字按行分割，逐行搜索
         if (!marked1) {

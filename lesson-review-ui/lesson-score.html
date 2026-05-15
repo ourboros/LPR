@@ -60,14 +60,6 @@
             <i class="nav-icon fa-solid fa-trash"></i>
             <span>刪除紀錄</span>
           </button>
-          <div class="nav-auth-block">
-            <div data-auth-user class="nav-auth-user">目前未登入</div>
-            <div
-              data-auth-button
-              class="nav-item nav-auth-button"
-              aria-label="Google 登入"
-            ></div>
-          </div>
         </nav>
       </aside>
 
@@ -166,6 +158,14 @@
                 重置評分
               </button>
               <button
+                id="exportPdfBtn"
+                class="score-btn score-btn--secondary"
+                type="button"
+                aria-label="匯出評分報告為 PDF"
+              >
+                <i class="fa-solid fa-download"></i> 匯出 PDF
+              </button>
+              <button
                 id="saveBtn"
                 class="score-btn score-btn--primary"
                 type="button"
@@ -181,6 +181,7 @@
     <script src="/app/auth.js"></script>
     <script src="/app/api.js"></script>
     <script src="/app/auth-ui.js"></script>
+    <script src="/app/pdf-export.js"></script>
     <script src="/app/lesson-shared-actions.js"></script>
     <script src="/app/lesson-score.js"></script>
   </body>

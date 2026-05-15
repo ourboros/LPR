@@ -1154,3 +1154,110 @@ body:not(.auth-ui-ready) .nav-auth-block {
     min-height: 52px;
   }
 }
+
+/* ===== 文字選擇菜單 ===== */
+
+.selection-menu[hidden] {
+  display: none !important;
+}
+
+.selection-menu {
+  position: fixed;
+  background: #1f2937;
+  border: 2px solid #374151;
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 1300;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  min-width: 260px;
+  animation: slideIn 0.2s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.selection-menu__header {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #4b5563;
+}
+
+.selection-menu__text {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  display: block;
+  max-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
+
+.selection-menu__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selection-menu__btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.selection-menu__btn--primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.selection-menu__btn--primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.selection-menu__btn--secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.selection-menu__btn--secondary:hover:not(:disabled) {
+  background: #4b5563;
+  transform: translateY(-1px);
+}
+
+.selection-menu__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selection-menu__btn i {
+  font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+  .selection-menu {
+    min-width: 200px;
+    padding: 10px;
+  }
+
+  .selection-menu__btn {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+}

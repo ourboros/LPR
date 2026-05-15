@@ -379,6 +379,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!hasCurrentScore) {
     await restoreLatestScoresToForm();
   }
+
+  // ✅ 新增：檢查是否有來自 lesson-review.html 的選定文字
+  const selectedReviewText = sessionStorage.getItem("selectedReviewText");
+  if (selectedReviewText) {
+    // 將選定的文字加入到評分說明區域
+    if (scoreComment && scoreComment.value) {
+      // 如果已有內容，換行後添加
+      scoreComment.value += "\n\n" + selectedReviewText;
+    } else {
+      // 否則直接設置
+      scoreComment.value = selectedReviewText;
+    }
+
+    // 清除 sessionStorage
+    sessionStorage.removeItem("selectedReviewText");
+
+    // 顯示提示訊息
+    showToast("已將選定的評論內容加入評分說明");
+
+    // 滾動到評分說明區域
+    setTimeout(() => {
+      scoreComment.scrollIntoView({ behavior: "smooth", block: "center" });
+      scoreComment.focus();
+    }, 300);
+  }
 });
 
 function handleResetBtn() {
@@ -404,3 +429,30 @@ function handleResetBtn() {
 
 resetBtn.addEventListener("click", handleResetBtn);
 saveBtn.addEventListener("click", saveScores);
+
+// ============================================
+// PDF 匯出
+// ============================================
+
+const exportPdfBtn = document.getElementById("exportPdfBtn");
+if (exportPdfBtn) {
+  exportPdfBtn.addEventListener("click", async () => {
+    exportPdfBtn.disabled = true;
+    try {
+      const lessonId =
+        (window.LPR && window.LPR.getCurrentLessonId()) ||
+        localStorage.getItem(CURRENT_LESSON_KEY) ||
+        localStorage.getItem(LEGACY_CURRENT_LESSON_KEY);
+
+      const lessonName = lessonId ? `教案-${lessonId}` : "教案評分報告";
+
+      await window.PDFExporter.exportScoreReport(scores, lessonName);
+      showToast("PDF 匯出成功", "success");
+    } catch (error) {
+      console.error("匯出 PDF 失敗:", error);
+      showToast("PDF 匯出失敗，請稍後重試", "error");
+    } finally {
+      exportPdfBtn.disabled = false;
+    }
+  });
+}
