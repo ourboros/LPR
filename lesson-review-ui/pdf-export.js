@@ -78,79 +78,205 @@ const PDFExporter = {
   },
 
   /**
-   * 收集評論資料
+   * 收集評論資料 - 使用 API 而不是 DOM
    */
   async collectReviewData() {
-    const reviewResult = document.getElementById("reviewResult");
-    if (!reviewResult) {
+    try {
+      const lessonId = window.LPR?.getCurrentLessonId();
+      if (!lessonId) {
+        return {
+          title: "教案評論",
+          content: "（尚未選擇教案）",
+          available: false,
+        };
+      }
+
+      const response = await window.LPR?.request(
+        `/reviews/lesson/${lessonId}`,
+        {
+          method: "GET",
+        },
+      );
+
+      if (!response || !Array.isArray(response)) {
+        return {
+          title: "教案評論",
+          content: "（無評論內容）",
+          available: false,
+        };
+      }
+
+      // 過濾出正式評論（mode === 'review-formal'）並按時間倒序排列
+      const formalReviews = response
+        .filter((r) => r.mode === "review-formal" && r.aiContent)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      if (formalReviews.length === 0) {
+        return {
+          title: "教案評論",
+          content: "（無評論內容）",
+          available: false,
+        };
+      }
+
+      // 組合所有正式評論
+      const reviewText = formalReviews
+        .map((r) => r.aiContent)
+        .join("\n\n---\n\n");
+
       return {
         title: "教案評論",
-        content: "（無評論內容）",
+        content: reviewText,
+        available: true,
+      };
+    } catch (error) {
+      console.error("收集評論資料失敗:", error);
+      return {
+        title: "教案評論",
+        content: "（無法取得評論內容）",
         available: false,
       };
     }
-
-    // 提取純文字內容（移除 Markdown 標記）
-    const bubbles = reviewResult.querySelectorAll(".review-bubble");
-    let reviewText = "";
-
-    bubbles.forEach((bubble, index) => {
-      reviewText += bubble.textContent.trim();
-      if (index < bubbles.length - 1) {
-        reviewText += "\n\n---\n\n";
-      }
-    });
-
-    return {
-      title: "教案評論",
-      content: reviewText || "（無評論內容）",
-      available: bubbles.length > 0,
-    };
   },
 
   /**
-   * 收集對話記錄
+   * 收集對話記錄 - 使用 API 而不是 DOM
    */
   async collectChatData() {
-    const chatList = document.getElementById("chatList");
-    if (!chatList) {
+    try {
+      const lessonId = window.LPR?.getCurrentLessonId();
+      if (!lessonId) {
+        return {
+          title: "對話記錄",
+          messages: [],
+          available: false,
+        };
+      }
+
+      const response = await window.LPR?.request(
+        `/reviews/lesson/${lessonId}`,
+        {
+          method: "GET",
+        },
+      );
+
+      if (!response || !Array.isArray(response)) {
+        return {
+          title: "對話記錄",
+          messages: [],
+          available: false,
+        };
+      }
+
+      // 過濾出對話記錄（mode === 'chat-free'）並按時間順序排列
+      const chatRecords = response
+        .filter((r) => r.mode === "chat-free" && r.userPrompt && r.aiContent)
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+      if (chatRecords.length === 0) {
+        return {
+          title: "對話記錄",
+          messages: [],
+          available: false,
+        };
+      }
+
+      // 組合用戶提示和 AI 回應
+      const messages = [];
+      chatRecords.forEach((record) => {
+        messages.push({
+          role: "使用者",
+          text: record.userPrompt,
+        });
+        messages.push({
+          role: "系統",
+          text: record.aiContent,
+        });
+      });
+
+      return {
+        title: "對話記錄",
+        messages: messages,
+        available: messages.length > 0,
+      };
+    } catch (error) {
+      console.error("收集對話記錄失敗:", error);
       return {
         title: "對話記錄",
         messages: [],
         available: false,
       };
     }
-
-    const messages = [];
-    const bubbles = chatList.querySelectorAll(".bubble");
-
-    bubbles.forEach((bubble) => {
-      const isUser = bubble.classList.contains("bubble-user");
-      const text = bubble.textContent.trim();
-
-      if (text) {
-        messages.push({
-          role: isUser ? "使用者" : "系統",
-          text: text,
-        });
-      }
-    });
-
-    return {
-      title: "對話記錄",
-      messages: messages,
-      available: messages.length > 0,
-    };
   },
 
   /**
-   * 收集評分資料
+   * 收集評分資料 - 使用 API 而不是 DOM
    */
   async collectScoreData() {
-    const totalScoreValue = document.getElementById("totalScoreValue");
-    const scoreComment = document.getElementById("scoreComment");
+    try {
+      const lessonId = window.LPR?.getCurrentLessonId();
+      if (!lessonId) {
+        return {
+          title: "教案評分",
+          ratings: [],
+          comment: "",
+          totalScore: "0.0/5.0",
+          available: false,
+        };
+      }
 
-    if (!totalScoreValue && !scoreComment) {
+      const response = await window.LPR?.request(`/scores/lesson/${lessonId}`, {
+        method: "GET",
+      });
+
+      if (!response || !Array.isArray(response)) {
+        return {
+          title: "教案評分",
+          ratings: [],
+          comment: "",
+          totalScore: "0.0/5.0",
+          available: false,
+        };
+      }
+
+      // 取得最新的評分記錄
+      if (response.length === 0) {
+        return {
+          title: "教案評分",
+          ratings: [],
+          comment: "",
+          totalScore: "0.0/5.0",
+          available: false,
+        };
+      }
+
+      const latestScore = response[0];
+      const scores = latestScore.scores || {};
+
+      // 定義評分維度的標籤（順序與前端一致）
+      const dimensionLabels = {
+        structure: "教案架構與設計理念",
+        objectives: "目標設定與課綱符合度",
+        activities: "教學活動與邏輯安排",
+        methods: "教學方法、資源與創意",
+        assessment: "評量策略與時間分配",
+      };
+
+      // 組合評分項目
+      const ratings = Object.entries(dimensionLabels).map(([key, label]) => ({
+        label,
+        value: scores[key] ? scores[key].toString() : "0",
+      }));
+
+      return {
+        title: "教案評分",
+        ratings: ratings,
+        comment: latestScore.comment || "",
+        totalScore: `${latestScore.total}/5.0`,
+        available: true,
+      };
+    } catch (error) {
+      console.error("收集評分資料失敗:", error);
       return {
         title: "教案評分",
         ratings: [],
@@ -159,23 +285,6 @@ const PDFExporter = {
         available: false,
       };
     }
-
-    // 收集評分項目
-    const ratings = [];
-    document.querySelectorAll(".rating-item").forEach((item) => {
-      const label = item.querySelector(".rating-label")?.textContent || "";
-      const starValue =
-        item.querySelector(".star-rating")?.dataset.value || "0";
-      ratings.push({ label, value: starValue });
-    });
-
-    return {
-      title: "教案評分",
-      ratings: ratings,
-      comment: scoreComment?.value || "",
-      totalScore: totalScoreValue?.textContent || "0.0/5.0",
-      available: true,
-    };
   },
 
   /**
