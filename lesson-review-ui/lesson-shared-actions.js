@@ -84,7 +84,10 @@
 
       window.LPR.clearCurrentLesson();
       window.LPR?.removeSessionValue?.("chatSessionId", "lpr.chatSessionId");
-      window.LPR?.removeSessionValue?.("reviewSessionId", "lpr.reviewSessionId");
+      window.LPR?.removeSessionValue?.(
+        "reviewSessionId",
+        "lpr.reviewSessionId",
+      );
       navigateToUpload();
     } catch (error) {
       alert(`刪除失敗：${extractErrorMessage(error)}`);
@@ -115,6 +118,34 @@
         button.addEventListener("click", handleDeleteHistory);
         button.dataset.boundDeleteHistory = "true";
       });
+
+    // 全域匯出按鈕事件處理
+    const globalExportBtn = document.getElementById("globalExportBtn");
+    if (globalExportBtn && !globalExportBtn.dataset.boundGlobalExport) {
+      globalExportBtn.addEventListener("click", async () => {
+        globalExportBtn.disabled = true;
+        globalExportBtn.textContent = "匯出中...";
+
+        try {
+          const lessonId = window.LPR?.getCurrentLessonId();
+          const lessonName = window.LPR?.getCurrentLessonName() || "教案";
+
+          if (!lessonId) {
+            alert("尚未選擇教案，請先回到上傳頁上傳教案");
+            return;
+          }
+
+          await window.PDFExporter.exportAll(lessonName);
+        } catch (error) {
+          console.error("全域匯出失敗:", error);
+          alert("匯出失敗，請稍後重試");
+        } finally {
+          globalExportBtn.disabled = false;
+          globalExportBtn.textContent = "匯出報告";
+          globalExportBtn.dataset.boundGlobalExport = "true";
+        }
+      });
+    }
   }
 
   if (document.readyState === "loading") {

@@ -598,30 +598,6 @@ regenerateBtn.addEventListener("click", async () => {
     '<i class="fa-solid fa-rotate-right"></i> 重新生成評論';
 });
 
-// 匯出評論 PDF 按鈕
-const exportReviewBtn = document.getElementById("exportReviewBtn");
-if (exportReviewBtn) {
-  exportReviewBtn.addEventListener("click", async () => {
-    const reviewContent = reviewResult.innerHTML;
-    if (!reviewContent || reviewContent.trim() === "") {
-      alert("尚無評論內容可匯出");
-      return;
-    }
-
-    exportReviewBtn.disabled = true;
-    try {
-      const lessonId = window.LPR?.getCurrentLessonId();
-      const title = lessonId ? `教案評論-${lessonId}` : "教案評論";
-      await window.PDFExporter.exportReviewContent(title, reviewContent);
-    } catch (error) {
-      console.error("匯出評論 PDF 失敗:", error);
-      alert("匯出 PDF 失敗，請稍後重試");
-    } finally {
-      exportReviewBtn.disabled = false;
-    }
-  });
-}
-
 // ============================================
 // 文字選擇菜單事件處理
 // ============================================

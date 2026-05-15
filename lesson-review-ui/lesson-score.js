@@ -429,30 +429,3 @@ function handleResetBtn() {
 
 resetBtn.addEventListener("click", handleResetBtn);
 saveBtn.addEventListener("click", saveScores);
-
-// ============================================
-// PDF 匯出
-// ============================================
-
-const exportPdfBtn = document.getElementById("exportPdfBtn");
-if (exportPdfBtn) {
-  exportPdfBtn.addEventListener("click", async () => {
-    exportPdfBtn.disabled = true;
-    try {
-      const lessonId =
-        (window.LPR && window.LPR.getCurrentLessonId()) ||
-        localStorage.getItem(CURRENT_LESSON_KEY) ||
-        localStorage.getItem(LEGACY_CURRENT_LESSON_KEY);
-
-      const lessonName = lessonId ? `教案-${lessonId}` : "教案評分報告";
-
-      await window.PDFExporter.exportScoreReport(scores, lessonName);
-      showToast("PDF 匯出成功", "success");
-    } catch (error) {
-      console.error("匯出 PDF 失敗:", error);
-      showToast("PDF 匯出失敗，請稍後重試", "error");
-    } finally {
-      exportPdfBtn.disabled = false;
-    }
-  });
-}

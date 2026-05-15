@@ -292,42 +292,6 @@ if (chatInput && quickButtons.length > 0) {
   });
 }
 
-// ============================================
-// 匯出對話記錄 PDF
-// ============================================
-
-const exportChatBtn = document.getElementById("exportChatBtn");
-if (exportChatBtn) {
-  exportChatBtn.addEventListener("click", async () => {
-    const chatMessages = Array.from(chatList.querySelectorAll(".bubble")).map(
-      (bubble) => {
-        const isUser = bubble.classList.contains("bubble-user");
-        return {
-          role: isUser ? "user" : "assistant",
-          text: bubble.textContent.trim(),
-        };
-      },
-    );
-
-    if (chatMessages.length === 0) {
-      alert("沒有對話記錄可匯出");
-      return;
-    }
-
-    exportChatBtn.disabled = true;
-    try {
-      const lessonId = window.LPR?.getCurrentLessonId();
-      const title = lessonId ? `對話記錄-${lessonId}` : "對話記錄";
-      await window.PDFExporter.exportChatHistory(chatMessages, title);
-    } catch (error) {
-      console.error("匯出對話 PDF 失敗:", error);
-      alert("匯出 PDF 失敗，請稍後重試");
-    } finally {
-      exportChatBtn.disabled = false;
-    }
-  });
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
   const currentLessonName = window.LPR.getCurrentLessonName();
 
