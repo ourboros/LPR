@@ -228,6 +228,20 @@ if (clearHistoryBtn) {
 document.addEventListener("DOMContentLoaded", () => {
   hideDuplicateModal();
 
+  // 電腦版初始化時展開面板
+  if (window.innerWidth > 900) {
+    document.getElementById("reviewHistoryPanel").classList.remove("collapsed");
+  }
+
+  // 監聽視窗大小改變，自動調整展開/摺疊狀態
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) {
+      document.getElementById("reviewHistoryPanel").classList.remove("collapsed");
+    } else {
+      document.getElementById("reviewHistoryPanel").classList.add("collapsed");
+    }
+  });
+
   window.addEventListener("lpr:auth:success", (event) => {
     const userName = event.detail?.name || "使用者";
     setStatus(`✓ 已登入：${userName}`, "success");
