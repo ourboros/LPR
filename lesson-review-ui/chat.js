@@ -87,6 +87,14 @@ async function callChatApi(message, options = {}) {
     throw new Error("尚未選擇教案，請先回到上傳頁上傳教案");
   }
 
+  console.log("[Chat API] 發送對話請求:", {
+    message: message?.substring(0, 50),
+    mode,
+    action,
+    lessonId,
+    currentSessionId,
+  });
+
   if (mode === "quick-action" && action === "analyze") {
     return window.LPR.request("/chat/analyze", {
       method: "POST",
@@ -140,8 +148,16 @@ async function requestAssistantReply(message, options = {}) {
   } = options;
 
   if (!message) {
+    console.warn("[Request Reply] 消息為空，退出");
     return;
   }
+
+  console.log("[Request Reply] 開始處理回覆請求:", {
+    mode,
+    action,
+    messageLength: message.length,
+    showUser,
+  });
 
   if (showUser) {
     appendBubble(message, "user", message.length <= 20);
@@ -155,6 +171,14 @@ async function requestAssistantReply(message, options = {}) {
       action,
       maxChars,
     });
+
+    console.log("[Request Reply] 伺服器回應:", {
+      mode,
+      action,
+      sessionId: data.sessionId,
+      contentLength: data.content?.length || 0,
+    });
+
     currentSessionId = data.sessionId || currentSessionId;
     if (currentSessionId) {
       sessionStorage.setItem(CHAT_SESSION_KEY, currentSessionId);
@@ -270,6 +294,13 @@ if (chatForm && chatInput) {
     const message = chatInput.value.trim();
     chatInput.value = "";
     chatInput.focus();
+
+    console.log("[Chat Form] 用戶提交了聊天消息:", {
+      message: message?.substring(0, 50),
+      lessonId: window.LPR.getCurrentLessonId(),
+      sessionId: currentSessionId,
+    });
+
     await requestAssistantReply(message, {
       mode: "chat-free",
       action: "free",
