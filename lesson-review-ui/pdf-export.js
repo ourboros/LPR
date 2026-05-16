@@ -42,6 +42,17 @@ const PDFExporter = {
     }
 
     try {
+      const lessonId = window.LPR?.getCurrentLessonId();
+      const currentSessionId = window.LPR?.getSessionValue(
+        "guestSessionId",
+        "lpr.guestSessionId",
+      );
+
+      console.log("=== PDF 匯出開始 ===");
+      console.log("教案 ID:", lessonId);
+      console.log("教案名稱:", lessonName);
+      console.log("當前會話 ID:", currentSessionId);
+
       // 收集評論內容
       const reviewContent = await this.collectReviewData();
 
@@ -50,6 +61,16 @@ const PDFExporter = {
 
       // 收集評分資料
       const scoreData = await this.collectScoreData();
+
+      console.log("=== 收集完成 ===");
+      console.log("評論可用:", reviewContent.available);
+      console.log(
+        "對話可用:",
+        chatHistory.available,
+        "消息數:",
+        chatHistory.messages?.length || 0,
+      );
+      console.log("評分可用:", scoreData.available);
 
       // 生成聯合 PDF
       const htmlContent = this.generateCombinedHTML(
@@ -71,6 +92,7 @@ const PDFExporter = {
       };
 
       await html2pdf().set(options).from(element).save();
+      console.log("PDF 匯出完成");
     } catch (error) {
       console.error("PDF 匯出失敗:", error);
       alert("PDF 匯出失敗，請稍後重試");
@@ -100,6 +122,20 @@ const PDFExporter = {
           },
         },
       );
+
+      console.log("[PDF Export] 評論資料 API 返回:", response);
+      console.log(
+        "[PDF Export] 總記錄數:",
+        Array.isArray(response) ? response.length : 0,
+      );
+
+      if (response && Array.isArray(response)) {
+        const modes = {};
+        response.forEach((r) => {
+          modes[r.mode] = (modes[r.mode] || 0) + 1;
+        });
+        console.log("[PDF Export] 按 mode 分類:", modes);
+      }
 
       if (!response || !Array.isArray(response)) {
         return {
@@ -149,12 +185,15 @@ const PDFExporter = {
     try {
       const lessonId = window.LPR?.getCurrentLessonId();
       if (!lessonId) {
+        console.warn("[PDF Export] 未選擇教案");
         return {
           title: "對話記錄",
           messages: [],
           available: false,
         };
       }
+
+      console.log("[PDF Export] 開始收集對話記錄，lessonId:", lessonId);
 
       // 添加 cache-control 頭以強制伺服器返回最新資料，避免 304 Not Modified
       const response = await window.LPR?.request(
@@ -167,7 +206,16 @@ const PDFExporter = {
         },
       );
 
+      console.log("[PDF Export] API 返回的完整數據:", response);
+      console.log(
+        "[PDF Export] 數據類型:",
+        typeof response,
+        "是否為陣列:",
+        Array.isArray(response),
+      );
+
       if (!response || !Array.isArray(response)) {
+        console.warn("[PDF Export] API 返回的不是陣列", response);
         return {
           title: "對話記錄",
           messages: [],
@@ -175,13 +223,35 @@ const PDFExporter = {
         };
       }
 
+      console.log("[PDF Export] 總記錄數:", response.length);
+      console.log(
+        "[PDF Export] 所有記錄的 mode 類型分布:",
+        response.reduce((acc, r) => {
+          acc[r.mode] = (acc[r.mode] || 0) + 1;
+          return acc;
+        }, {}),
+      );
+
       // 過濾出對話記錄（mode === 'chat-free'）並按時間順序排列
-      // 注意：某些對話可能沒有 userPrompt（如系統生成的消息），但必須有 aiContent
       const chatRecords = response
-        .filter((r) => r.mode === "chat-free" && r.aiContent)
+        .filter((r) => {
+          const isMatch = r.mode === "chat-free" && r.aiContent;
+          if (isMatch) {
+            console.log("[PDF Export] 找到匹配的對話記錄:", {
+              mode: r.mode,
+              userPrompt: r.userPrompt?.substring(0, 50),
+              aiContent: r.aiContent?.substring(0, 50),
+              createdAt: r.createdAt,
+            });
+          }
+          return isMatch;
+        })
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
+      console.log("[PDF Export] 過濾後的對話記錄數:", chatRecords.length);
+
       if (chatRecords.length === 0) {
+        console.warn("[PDF Export] 沒有找到任何 mode==='chat-free' 的記錄");
         return {
           title: "對話記錄",
           messages: [],
@@ -208,13 +278,16 @@ const PDFExporter = {
         }
       });
 
+      console.log("[PDF Export] 最終生成的對話消息數:", messages.length);
+
       return {
         title: "對話記錄",
         messages: messages,
         available: messages.length > 0,
       };
     } catch (error) {
-      console.error("收集對話記錄失敗:", error);
+      console.error("[PDF Export] 收集對話記錄失敗:", error);
+      console.error("[PDF Export] 錯誤堆棧:", error.stack);
       return {
         title: "對話記錄",
         messages: [],
