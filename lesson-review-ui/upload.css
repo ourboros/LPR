@@ -54,9 +54,13 @@ body {
   width: 100%;
 }
 
+.instructions-panel {
+  justify-content: center;
+}
+
 .panel-header {
   padding: 16px 20px;
-  background: var(--color-page-bg);
+  background: var(--color-bg);
   color: var(--color-deep);
   border-bottom: 3px solid var(--color-deep);
   display: flex;
@@ -99,14 +103,10 @@ body {
   background: var(--color-bg);
   border-radius: 20px;
   padding: 60px 40px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  flex: 1;
   max-width: 500px;
   width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
 }
 
 .upload-icon {

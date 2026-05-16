@@ -231,17 +231,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // 電腦版初始化時展開面板
   if (window.innerWidth > 900) {
     document.getElementById("reviewHistoryPanel").classList.remove("collapsed");
-    document.getElementById("systemIntroPanel").classList.remove("collapsed");
   }
 
   // 監聽視窗大小改變，自動調整展開/摺疊狀態
   window.addEventListener("resize", () => {
     if (window.innerWidth > 900) {
       document.getElementById("reviewHistoryPanel").classList.remove("collapsed");
-      document.getElementById("systemIntroPanel").classList.remove("collapsed");
     } else {
       document.getElementById("reviewHistoryPanel").classList.add("collapsed");
-      document.getElementById("systemIntroPanel").classList.add("collapsed");
     }
   });
 
