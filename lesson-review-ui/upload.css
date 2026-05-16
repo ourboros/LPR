@@ -5,6 +5,7 @@
   --color-soft: #bfcde0;
   --color-bg: #fefcfd;
   --color-page-bg: #d9d9d9;
+  --color-bar: #101935;
 }
 
 * {
@@ -31,8 +32,8 @@ body {
 .upload-container {
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: 1fr minmax(400px, 2fr) 1fr;
+  display: flex;
+  flex-direction: row;
   gap: 20px;
   align-items: stretch;
   justify-content: center;
@@ -48,12 +49,16 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
+  max-width: 500px;
+  width: 100%;
 }
 
 .panel-header {
   padding: 16px 20px;
-  background: var(--color-nav);
-  color: var(--color-bg);
+  background: var(--color-page-bg);
+  color: var(--color-deep);
+  border-bottom: 3px solid var(--color-deep);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -71,7 +76,7 @@ body {
 .toggle-btn {
   background: none;
   border: none;
-  color: var(--color-bg);
+  color: var(--color-deep);
   font-size: 1.2rem;
   cursor: pointer;
   display: none; /* 電腦版隱藏摺疊按鈕 */
@@ -79,7 +84,7 @@ body {
 }
 
 .panel-content {
-  padding: 20px;
+  padding: 10px;
   color: #444;
 }
 
@@ -94,12 +99,14 @@ body {
   background: var(--color-bg);
   border-radius: 20px;
   padding: 60px 40px;
-  width: 100%;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   text-align: center;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  flex: 1;
+  max-width: 500px;
+  width: 100%;
 }
 
 .upload-icon {
@@ -352,7 +359,8 @@ body:not(.auth-ui-ready) .upload-auth-inline {
 
 @media (max-width: 900px) {
   .upload-container {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: center;
     padding: 20px;
   }
 
