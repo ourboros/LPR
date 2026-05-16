@@ -378,9 +378,46 @@ const PDFExporter = {
   },
 
   /**
-   * 生成聯合 HTML 報告
+   * 轉換 Markdown 文本為基本 HTML 格式
    */
-  generateCombinedHTML(lessonName, reviewData, chatData, scoreData) {
+  convertMarkdownToHtml(text) {
+    if (!text) return "";
+
+    let html = this.escapeHtml(text);
+
+    // 處理粗體：**text** → <strong>text</strong>
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+    // 處理斜體：*text* → <em>text</em>（避免與粗體衝突）
+    html = html.replace(/(?<!\*)\*(.*?)\*(?!\*)/g, "<em>$1</em>");
+
+    // 處理標題：### text → <h3>text</h3>, ## text → <h3>text</h3>, etc.
+    html = html.replace(/^### (.*?)$/gm, "<h3>$1</h3>");
+    html = html.replace(/^## (.*?)$/gm, "<h3>$1</h3>");
+    html = html.replace(/^# (.*?)$/gm, "<h2>$1</h2>");
+
+    // 處理程式碼塊
+    html = html.replace(/`(.*?)`/g, "<code>$1</code>");
+
+    // 處理換行符號
+    html = html.replace(/\n/g, "<br>");
+
+    return html;
+  },
+
+  /**
+   * 轉義 HTML 特殊字符
+   */
+  escapeHtml(text) {
+    if (!text) return "";
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
     return `
       <html>
         <head>
@@ -442,7 +479,7 @@ const PDFExporter = {
             }
             .section {
               margin-bottom: 40px;
-              page-break-inside: avoid;
+              page-break-inside: auto;
             }
             .section-break {
               page-break-after: always;
@@ -472,6 +509,16 @@ const PDFExporter = {
               border-left: 4px solid #1976d2;
               border-radius: 3px;
               margin: 12px 0;
+              page-break-inside: auto;
+              overflow-wrap: break-word;
+              word-break: break-word;
+            }
+            .content-box h2,
+            .content-box h3,
+            .content-box h4 {
+              page-break-after: avoid;
+              margin-top: 12px;
+              margin-bottom: 8px;
             }
             .rating-item {
               display: flex;
@@ -537,12 +584,48 @@ const PDFExporter = {
               word-wrap: break-word;
               font-size: 13px;
               line-height: 1.5;
+              overflow-wrap: break-word;
+              word-break: break-word;
             }
             .comment-text {
               white-space: pre-wrap;
               word-wrap: break-word;
               line-height: 1.5;
               color: #333;
+              overflow-wrap: break-word;
+              word-break: break-word;
+            }
+            .comment-text strong {
+              font-weight: bold;
+            }
+            .comment-text em {
+              font-style: italic;
+            }
+            .comment-text h2,
+            .comment-text h3,
+            .comment-text h4 {
+              font-weight: bold;
+              margin-top: 12px;
+              margin-bottom: 8px;
+              page-break-after: avoid;
+            }
+            .comment-text h2 {
+              font-size: 18px;
+            }
+            .comment-text h3 {
+              font-size: 16px;
+            }
+            .comment-text h4 {
+              font-size: 14px;
+            }
+            .comment-text ul,
+            .comment-text ol {
+              margin-left: 20px;
+              margin-top: 8px;
+              margin-bottom: 8px;
+            }
+            .comment-text li {
+              margin-bottom: 4px;
             }
             .empty-content {
               color: #999;
@@ -592,10 +675,7 @@ const PDFExporter = {
             ${
               reviewData.available
                 ? `<div class="content-box">
-                   <div class="comment-text">${reviewData.content.replace(
-                     /</g,
-                     "&lt;",
-                   )}</div>
+                   <div class="comment-text">${this.convertMarkdownToHtml(reviewData.content)}</div>
                  </div>`
                 : '<div class="empty-content">暫無評論內容</div>'
             }
@@ -611,10 +691,7 @@ const PDFExporter = {
                       (msg) => `
                     <div class="chat-message ${msg.role === "使用者" ? "user" : "system"}">
                       <div class="message-role">${msg.role}</div>
-                      <div class="message-text">${msg.text.replace(
-                        /</g,
-                        "&lt;",
-                      )}</div>
+                      <div class="message-text">${this.escapeHtml(msg.text)}</div>
                     </div>
                   `,
                     )
@@ -653,10 +730,7 @@ const PDFExporter = {
                   ? `
                 <div class="subsection-title">評分說明與建議</div>
                 <div class="content-box">
-                  <div class="comment-text">${scoreData.comment.replace(
-                    /</g,
-                    "&lt;",
-                  )}</div>
+                  <div class="comment-text">${this.convertMarkdownToHtml(scoreData.comment)}</div>
                 </div>
               `
                   : ""
