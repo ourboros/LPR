@@ -59,6 +59,26 @@ body {
   color: var(--color-deep);
 }
 
+.upload-instructions {
+  background: var(--color-bg);
+  border: 1px solid var(--color-soft);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  text-align: left;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #444;
+}
+
+.upload-instructions p {
+  margin: 0 0 8px 0;
+}
+
+.upload-instructions p:last-child {
+  margin-bottom: 0;
+}
+
 .upload-zone {
   border: 2px dashed var(--color-soft);
   border-radius: 12px;
