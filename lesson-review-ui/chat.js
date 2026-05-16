@@ -87,7 +87,17 @@ async function callChatApi(message, options = {}) {
     throw new Error("尚未選擇教案，請先回到上傳頁上傳教案");
   }
 
-  if (mode === "quick-action" && action === "analyze") {
+  console.log("[Chat API] 發送對話請求:", {
+    message: message?.substring(0, 50),
+    mode,
+    action,
+    lessonId,
+    currentSessionId,
+  });
+
+  // ✅ 改進：無論 mode 為何值，都根據 action 決定是否使用快速按鈕端點
+  if (action === "analyze") {
+    console.log("[Chat API] 使用專用分析端點");
     return window.LPR.request("/chat/analyze", {
       method: "POST",
       body: {
@@ -97,7 +107,8 @@ async function callChatApi(message, options = {}) {
     });
   }
 
-  if (mode === "quick-action" && action === "suggest") {
+  if (action === "suggest") {
+    console.log("[Chat API] 使用專用建議端點");
     return window.LPR.request("/chat/suggest", {
       method: "POST",
       body: {
@@ -107,7 +118,8 @@ async function callChatApi(message, options = {}) {
     });
   }
 
-  if (mode === "quick-action" && action === "score") {
+  if (action === "score") {
+    console.log("[Chat API] 使用專用評分端點");
     return window.LPR.request("/chat/score", {
       method: "POST",
       body: {
@@ -117,6 +129,7 @@ async function callChatApi(message, options = {}) {
     });
   }
 
+  console.log("[Chat API] 使用主對話端點");
   return window.LPR.request("/chat", {
     method: "POST",
     body: {
@@ -140,8 +153,16 @@ async function requestAssistantReply(message, options = {}) {
   } = options;
 
   if (!message) {
+    console.warn("[Request Reply] 消息為空，退出");
     return;
   }
+
+  console.log("[Request Reply] 開始處理回覆請求:", {
+    mode,
+    action,
+    messageLength: message.length,
+    showUser,
+  });
 
   if (showUser) {
     appendBubble(message, "user", message.length <= 20);
@@ -155,6 +176,14 @@ async function requestAssistantReply(message, options = {}) {
       action,
       maxChars,
     });
+
+    console.log("[Request Reply] 伺服器回應:", {
+      mode,
+      action,
+      sessionId: data.sessionId,
+      contentLength: data.content?.length || 0,
+    });
+
     currentSessionId = data.sessionId || currentSessionId;
     if (currentSessionId) {
       sessionStorage.setItem(CHAT_SESSION_KEY, currentSessionId);
@@ -270,6 +299,13 @@ if (chatForm && chatInput) {
     const message = chatInput.value.trim();
     chatInput.value = "";
     chatInput.focus();
+
+    console.log("[Chat Form] 用戶提交了聊天消息:", {
+      message: message?.substring(0, 50),
+      lessonId: window.LPR.getCurrentLessonId(),
+      sessionId: currentSessionId,
+    });
+
     await requestAssistantReply(message, {
       mode: "chat-free",
       action: "free",
@@ -282,8 +318,12 @@ if (chatInput && quickButtons.length > 0) {
     button.addEventListener("click", async () => {
       const prompt = button.dataset.prompt || "";
       const action = inferQuickAction(button);
+      console.log("[Quick Button] 用戶點擊了快速按鈕:", {
+        prompt: prompt?.substring(0, 50),
+        action,
+      });
       await requestAssistantReply(prompt, {
-        mode: "quick-action",
+        mode: "chat-free",
         action,
         maxChars: 300,
       });
@@ -310,13 +350,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!hasHistory) {
     try {
-      // ✅ 改進：添加錯誤處理，避免初始化失敗導致頁面崩潰
+      // ✅ 改進：將摘要改為 chat-free 模式，以便能被匯出
+      console.log("[Init] 開始生成初始摘要");
       await requestAssistantReply("請生成教案摘要", {
         showUser: false,
-        mode: "summary",
+        mode: "chat-free",
         action: "summary",
         maxChars: 500,
       });
+      console.log("[Init] 初始摘要生成完成");
     } catch (error) {
       console.error("[初始化] 生成摘要失敗，允許用戶手動操作:", error);
       appendSystemMessage(

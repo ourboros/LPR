@@ -42,6 +42,16 @@ router.post("/", async (req, res) => {
       maxChars,
     } = req.body;
 
+    // 診斷日誌
+    console.log("[Chat POST /] 收到對話請求:", {
+      mode,
+      action,
+      message: message?.substring(0, 50),
+      sessionId: req.sessionId,
+      userId: req.user?.id,
+      selectedSources,
+    });
+
     // 驗證輸入
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -134,6 +144,14 @@ router.post("/", async (req, res) => {
     history.push({ ...response, content: normalizedContent });
     sessions.set(sid, history);
 
+    console.log("[Chat POST /] 準備保存評論記錄:", {
+      lessonId: safeSelectedSources[0],
+      mode: normalizedMode,
+      action: normalizedAction,
+      sessionId: req.sessionId,
+      userId: req.user?.id,
+    });
+
     const savedReview = await persistReviewRecord({
       lessonId: safeSelectedSources[0] || null,
       sessionId: req.user ? null : req.sessionId || null,
@@ -143,6 +161,12 @@ router.post("/", async (req, res) => {
       userPrompt: message,
       aiContent: normalizedContent,
       sources: response.sources,
+    });
+
+    console.log("[Chat POST /] 評論記錄保存結果:", {
+      saved: !!savedReview,
+      reviewId: savedReview?.reviewId,
+      mode: normalizedMode,
     });
 
     // ✅ 方案三：即使保存失敗也返回結果，不阻止用戶
@@ -200,7 +224,7 @@ router.post("/analyze", async (req, res) => {
       lessonId: lesson.lessonId,
       sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      mode: "quick-action",
+      mode: "chat-free",
       action: "analyze",
       userPrompt: message,
       aiContent: response.content,
@@ -247,7 +271,7 @@ router.post("/score", async (req, res) => {
       lessonId: lesson.lessonId,
       sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      mode: "quick-action",
+      mode: "chat-free",
       action: "score",
       userPrompt: message,
       aiContent: response.content,
@@ -294,7 +318,7 @@ router.post("/suggest", async (req, res) => {
       lessonId: lesson.lessonId,
       sessionId: req.user ? null : req.sessionId || null,
       userId: req.user?.id || null,
-      mode: "quick-action",
+      mode: "chat-free",
       action: "suggest",
       userPrompt: message,
       aiContent: response.content,

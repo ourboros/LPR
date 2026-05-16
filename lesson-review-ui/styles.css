@@ -195,6 +195,19 @@ body:not(.auth-ui-ready) .nav-auth-block {
   outline: none;
 }
 
+.nav-item--export {
+  color: var(--color-nav);
+  background: transparent;
+  border-color: transparent;
+}
+
+.nav-item--export:hover,
+.nav-item--export:focus-visible {
+  color: var(--color-soft);
+  border-color: var(--color-soft);
+  outline: none;
+}
+
 .nav-item--danger {
   background: #ffe3e3;
   color: #8b1e1e;
