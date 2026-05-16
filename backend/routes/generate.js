@@ -267,6 +267,75 @@ router.post("/report", async (req, res) => {
   await generateReport(req, res, req.body.lessonId, req.body.scores);
 });
 
+/**
+ * POST /api/generate/suggest-scores
+ * 生成 AI 建議評分
+ */
+router.post("/suggest-scores", async (req, res) => {
+  const { lessonId } = req.body;
+  if (!lessonId) {
+    return res.status(400).json({ error: "請提供教案 ID" });
+  }
+
+  const lesson = await findLessonById(lessonId);
+  if (!lesson) {
+    return res.status(404).json({ error: "找不到指定的教案" });
+  }
+
+  const prompt = `請以 JSON 格式回應，不需包含其他說明文字或 Markdown 標記，直接輸出有效的 JSON 物件。
+請根據教案內容評估五個維度，給予 1 到 5 分的整數評分，並給予綜合建議。
+維度包含：structure(教案架構與設計理念)、objectives(目標設定與課綱符合度)、activities(教學活動與邏輯安排)、methods(教學方法、資源與創意)、assessment(評量策略與時間分配)。
+
+輸出格式範例：
+{
+  "scores": {
+    "structure": 4,
+    "objectives": 4,
+    "activities": 5,
+    "methods": 3,
+    "assessment": 4
+  },
+  "comment": "整體架構清晰，目標設定明確..."
+}
+
+教案內容:
+${lesson.content}`;
+
+  try {
+    const response = await ragService.generateComment(prompt);
+    // 嘗試解析 JSON (移除可能的 markdown code block 標記)
+    let jsonStr = response.content;
+    if (jsonStr.startsWith("\`\`\`json")) {
+      jsonStr = jsonStr.replace(/\`\`\`json/g, "").replace(/\`\`\`/g, "").trim();
+    } else if (jsonStr.startsWith("\`\`\`")) {
+      jsonStr = jsonStr.replace(/\`\`\`/g, "").trim();
+    }
+
+    let result;
+    try {
+      result = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error("JSON 解析失敗", jsonStr);
+      // Fallback 提供預設分數以防出錯
+      result = {
+        scores: { structure: 3, objectives: 3, activities: 3, methods: 3, assessment: 3 },
+        comment: response.content
+      };
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error("生成建議評分錯誤:", error);
+    res.status(500).json({
+      error: "生成建議評分時發生錯誤",
+      message: error.message
+    });
+  }
+});
+
 async function findLessonById(rawLessonId) {
   const lessonId = parseFloat(rawLessonId);
 

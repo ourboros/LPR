@@ -8,6 +8,7 @@ const totalScoreValue = document.getElementById("totalScoreValue");
 const scoreComment = document.getElementById("scoreComment");
 const resetBtn = document.getElementById("resetBtn");
 const saveBtn = document.getElementById("saveBtn");
+const aiSuggestBtn = document.getElementById("aiSuggestBtn");
 
 const SIDEBAR_STATE_KEY = "lpr.sidebarCollapsed";
 const CURRENT_LESSON_KEY = "lpr.currentLessonId";
@@ -117,6 +118,10 @@ function initStarRatings() {
       star.addEventListener("click", () => {
         const value = parseInt(star.dataset.star);
         scores[dimension] = value;
+
+        // 當使用者手動點擊時，移除 .ai-suggested 類別以恢復原色
+        starRating.classList.remove("ai-suggested");
+
         updateStars(starRating, value);
         updateTotalScore();
       });
@@ -178,11 +183,11 @@ function resetAllScores() {
 /**
  * 設定按鈕載入狀態
  */
-function setButtonLoading(button, isLoading) {
+function setButtonLoading(button, isLoading, loadingText = "載入中...") {
   if (isLoading) {
     button.disabled = true;
-    button.dataset.originalText = button.textContent;
-    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 儲存中...';
+    button.dataset.originalText = button.textContent.trim();
+    button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${loadingText}`;
     button.classList.add("loading");
   } else {
     button.disabled = false;
@@ -213,7 +218,7 @@ async function saveScores() {
   const sum = Object.values(scores).reduce((acc, val) => acc + val, 0);
   const total = Math.round((sum / DIMENSIONS.length) * 10) / 10;
 
-  setButtonLoading(saveBtn, true);
+  setButtonLoading(saveBtn, true, "儲存中...");
   resetBtn.disabled = true;
 
   try {
@@ -370,14 +375,88 @@ function showToast(message, type = "success") {
 }
 
 // ============================================
+// AI 建議評分
+// ============================================
+
+async function fetchAISuggestedScores() {
+  const lessonId =
+    (window.LPR && window.LPR.getCurrentLessonId()) ||
+    localStorage.getItem(CURRENT_LESSON_KEY) ||
+    localStorage.getItem(LEGACY_CURRENT_LESSON_KEY);
+
+  if (!lessonId) {
+    showToast("找不到目前的教案，無法生成建議評分", "error");
+    return;
+  }
+
+  setButtonLoading(aiSuggestBtn, true, "生成中...");
+
+  try {
+    const response = await window.LPR.request("/generate/suggest-scores", {
+      method: "POST",
+      body: { lessonId: parseFloat(lessonId) },
+    });
+
+    if (response.success && response.data && response.data.scores) {
+      const suggestedScores = response.data.scores;
+
+      // 更新每個維度
+      DIMENSIONS.forEach((dim) => {
+        if (suggestedScores[dim] !== undefined) {
+          const value = Number(suggestedScores[dim]);
+          if (Number.isFinite(value) && value >= 0 && value <= 5) {
+            scores[dim] = value;
+            const item = document.querySelector(`.rating-item[data-dimension="${dim}"]`);
+            if (item) {
+              const starRating = item.querySelector(".star-rating");
+              // 加上 .ai-suggested class
+              starRating.classList.add("ai-suggested");
+              updateStars(starRating, value);
+            }
+          }
+        }
+      });
+
+      // 更新說明
+      if (response.data.comment) {
+        if (scoreComment.value.trim()) {
+           scoreComment.value += "\n\n[AI 建議] " + response.data.comment;
+        } else {
+           scoreComment.value = "[AI 建議] " + response.data.comment;
+        }
+      }
+
+      updateTotalScore();
+      showToast("已載入 AI 建議評分", "success");
+    } else {
+      throw new Error("回傳格式不符");
+    }
+  } catch (error) {
+    console.error("生成建議評分失敗:", error);
+    showToast(`無法生成建議評分：${error.message}`, "error");
+  } finally {
+    setButtonLoading(aiSuggestBtn, false);
+  }
+}
+
+if (aiSuggestBtn) {
+  aiSuggestBtn.addEventListener("click", fetchAISuggestedScores);
+}
+
+// ============================================
 // 初始化
 // ============================================
 
 document.addEventListener("DOMContentLoaded", async () => {
   initStarRatings();
-  const hasCurrentScore = await loadExistingScores();
+  let hasCurrentScore = await loadExistingScores();
   if (!hasCurrentScore) {
-    await restoreLatestScoresToForm();
+    hasCurrentScore = await restoreLatestScoresToForm();
+  }
+
+  // 若沒有任何評分紀錄，自動生成 AI 建議評分
+  if (!hasCurrentScore) {
+    await fetchAISuggestedScores();
   }
 
   // ✅ 新增：檢查是否有來自 lesson-review.html 的選定文字

@@ -918,6 +918,10 @@ body:not(.auth-ui-ready) .nav-auth-block {
   color: var(--color-nav);
 }
 
+.star-rating.ai-suggested i.fa-solid {
+  color: var(--color-soft);
+}
+
 .star-rating:hover i {
   transform: scale(1.1);
 }
@@ -1000,7 +1004,7 @@ body:not(.auth-ui-ready) .nav-auth-block {
 .score-actions {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: var(--score-action-gap);
   height: var(--score-field-height);
   min-height: var(--score-field-height);
@@ -1020,6 +1024,7 @@ body:not(.auth-ui-ready) .nav-auth-block {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-height: 0;
 }
 
 .score-btn--primary {
