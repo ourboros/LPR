@@ -13,22 +13,24 @@
   </head>
   <body>
     <div class="upload-container">
+      <!-- 左欄：對話紀錄區塊 -->
+      <div class="side-panel chat-history-panel collapsed" id="chatHistoryPanel">
+        <div class="panel-header" onclick="document.getElementById('chatHistoryPanel').classList.toggle('collapsed')">
+          <h2><i class="fa-solid fa-clock-rotate-left"></i> 對話紀錄區塊</h2>
+          <button class="toggle-btn" type="button"><i class="fa-solid fa-chevron-down"></i></button>
+        </div>
+        <div class="panel-content">
+          <p class="empty-state">尚無對話紀錄</p>
+        </div>
+      </div>
+
+      <!-- 中欄：上傳教案與開始評論區塊 -->
       <div class="upload-card">
         <div class="upload-icon">
           <i class="fa-solid fa-cloud-arrow-up"></i>
         </div>
 
         <h1>教案輔助評論系統</h1>
-
-        <div class="upload-instructions">
-          <p>歡迎使用 LPR AI 教案評論輔助系統！本系統致力於降低教師撰寫與修正教案的時間成本。系統主要分為以下四個功能頁面：</p>
-          <ul>
-            <li><strong>教案上傳：</strong>負責教案檔案（支援 PDF, DOC, DOCX, TXT）的選擇與上傳，並由系統自動解析內容。</li>
-            <li><strong>AI 對話與摘要：</strong>聚焦於針對教案內容的快速對話，並提供摘要、結構分析與改進建議等快捷操作。</li>
-            <li><strong>教案正式評論：</strong>呈現 AI 生成的正式評論結果，並提供針對特定段落進行局部修訂的進階功能。</li>
-            <li><strong>人工量化評分：</strong>保留人工判斷空間，讓您可以手動為教案的五個維度進行量化評分並補充備註紀錄。</li>
-          </ul>
-        </div>
 
         <form id="uploadForm" class="upload-zone" enctype="multipart/form-data">
           <input
@@ -59,6 +61,23 @@
           上傳並開始評論
         </button>
         <div id="uploadStatus" class="upload-status"></div>
+      </div>
+
+      <!-- 右欄：簡易說明區塊 -->
+      <div class="side-panel instructions-panel collapsed" id="instructionsPanel">
+        <div class="panel-header" onclick="document.getElementById('instructionsPanel').classList.toggle('collapsed')">
+          <h2><i class="fa-solid fa-circle-info"></i> 簡易說明區塊</h2>
+          <button class="toggle-btn" type="button"><i class="fa-solid fa-chevron-down"></i></button>
+        </div>
+        <div class="panel-content upload-instructions">
+          <p>歡迎使用 LPR AI 教案評論輔助系統！本系統致力於降低教師撰寫與修正教案的時間成本。系統主要分為以下四個功能頁面：</p>
+          <ul>
+            <li><strong>教案上傳：</strong>負責教案檔案（支援 PDF, DOC, DOCX, TXT）的選擇與上傳，並由系統自動解析內容。</li>
+            <li><strong>AI 對話與摘要：</strong>聚焦於針對教案內容的快速對話，並提供摘要、結構分析與改進建議等快捷操作。</li>
+            <li><strong>教案正式評論：</strong>呈現 AI 生成的正式評論結果，並提供針對特定段落進行局部修訂的進階功能。</li>
+            <li><strong>人工量化評分：</strong>保留人工判斷空間，讓您可以手動為教案的五個維度進行量化評分並補充備註紀錄。</li>
+          </ul>
+        </div>
       </div>
     </div>
 
