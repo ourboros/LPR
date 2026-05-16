@@ -95,7 +95,9 @@ async function callChatApi(message, options = {}) {
     currentSessionId,
   });
 
-  if (mode === "quick-action" && action === "analyze") {
+  // ✅ 改進：無論 mode 為何值，都根據 action 決定是否使用快速按鈕端點
+  if (action === "analyze") {
+    console.log("[Chat API] 使用專用分析端點");
     return window.LPR.request("/chat/analyze", {
       method: "POST",
       body: {
@@ -105,7 +107,8 @@ async function callChatApi(message, options = {}) {
     });
   }
 
-  if (mode === "quick-action" && action === "suggest") {
+  if (action === "suggest") {
+    console.log("[Chat API] 使用專用建議端點");
     return window.LPR.request("/chat/suggest", {
       method: "POST",
       body: {
@@ -115,7 +118,8 @@ async function callChatApi(message, options = {}) {
     });
   }
 
-  if (mode === "quick-action" && action === "score") {
+  if (action === "score") {
+    console.log("[Chat API] 使用專用評分端點");
     return window.LPR.request("/chat/score", {
       method: "POST",
       body: {
@@ -125,6 +129,7 @@ async function callChatApi(message, options = {}) {
     });
   }
 
+  console.log("[Chat API] 使用主對話端點");
   return window.LPR.request("/chat", {
     method: "POST",
     body: {
@@ -313,8 +318,12 @@ if (chatInput && quickButtons.length > 0) {
     button.addEventListener("click", async () => {
       const prompt = button.dataset.prompt || "";
       const action = inferQuickAction(button);
+      console.log("[Quick Button] 用戶點擊了快速按鈕:", {
+        prompt: prompt?.substring(0, 50),
+        action,
+      });
       await requestAssistantReply(prompt, {
-        mode: "quick-action",
+        mode: "chat-free",
         action,
         maxChars: 300,
       });
@@ -341,13 +350,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!hasHistory) {
     try {
-      // ✅ 改進：添加錯誤處理，避免初始化失敗導致頁面崩潰
+      // ✅ 改進：將摘要改為 chat-free 模式，以便能被匯出
+      console.log("[Init] 開始生成初始摘要");
       await requestAssistantReply("請生成教案摘要", {
         showUser: false,
-        mode: "summary",
+        mode: "chat-free",
         action: "summary",
         maxChars: 500,
       });
+      console.log("[Init] 初始摘要生成完成");
     } catch (error) {
       console.error("[初始化] 生成摘要失敗，允許用戶手動操作:", error);
       appendSystemMessage(
