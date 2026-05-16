@@ -204,6 +204,11 @@
       );
     }
 
+    // 特殊處理 304 Not Modified - 返回空陣列作為預設值
+    if (response.status === 304) {
+      return [];
+    }
+
     const contentType = response.headers.get("content-type") || "";
     const isJson = contentType.includes("application/json");
     const payload = isJson ? await response.json() : await response.text();
