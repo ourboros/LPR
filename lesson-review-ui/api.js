@@ -53,7 +53,8 @@
   }
 
   function writeStorageValue(isSessionStorage, key, value) {
-    const normalizedValue = value === null || value === undefined ? "" : String(value);
+    const normalizedValue =
+      value === null || value === undefined ? "" : String(value);
     const storageKey = storageEntryKey(isSessionStorage, key);
     const storage = getStorageArea(isSessionStorage);
 

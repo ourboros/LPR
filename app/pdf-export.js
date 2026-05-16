@@ -157,6 +157,9 @@ const PDFExporter = {
         `/reviews/lesson/${lessonId}`,
         {
           method: "GET",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
         },
       );
 
@@ -169,8 +172,9 @@ const PDFExporter = {
       }
 
       // 過濾出對話記錄（mode === 'chat-free'）並按時間順序排列
+      // 注意：某些對話可能沒有 userPrompt（如系統生成的消息），但必須有 aiContent
       const chatRecords = response
-        .filter((r) => r.mode === "chat-free" && r.userPrompt && r.aiContent)
+        .filter((r) => r.mode === "chat-free" && r.aiContent)
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
       if (chatRecords.length === 0) {
@@ -184,14 +188,20 @@ const PDFExporter = {
       // 組合用戶提示和 AI 回應
       const messages = [];
       chatRecords.forEach((record) => {
-        messages.push({
-          role: "使用者",
-          text: record.userPrompt,
-        });
-        messages.push({
-          role: "系統",
-          text: record.aiContent,
-        });
+        // 只在有用戶提示時才添加用戶消息
+        if (record.userPrompt && record.userPrompt.trim()) {
+          messages.push({
+            role: "使用者",
+            text: record.userPrompt,
+          });
+        }
+        // 總是添加系統回應（因為過濾中已確保 aiContent 存在）
+        if (record.aiContent && record.aiContent.trim()) {
+          messages.push({
+            role: "系統",
+            text: record.aiContent,
+          });
+        }
       });
 
       return {
@@ -227,6 +237,9 @@ const PDFExporter = {
 
       const response = await window.LPR?.request(`/scores/lesson/${lessonId}`, {
         method: "GET",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
       });
 
       if (!response || !Array.isArray(response)) {
